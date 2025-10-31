@@ -177,7 +177,7 @@ export default function DashboardPage() {
                 <span>{user?.role}</span>
               </div>
               <button
-                onClick={logout}
+                onClick={()=>{logout; router.push("/login");}}
                 className="px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
                 title="Logout"
               >
@@ -236,34 +236,34 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
           <div className="bg-white rounded-lg shadow p-6">
             <h3 className="text-sm font-medium text-gray-500 uppercase">Total Sales</h3>
-            <p className="text-3xl font-bold text-green-600 mt-2">
+            <p className="text-2xl font-bold text-green-600 mt-2">
               {summary ? formatCurrency(summary.totals.sales) : formatCurrency(computedByBusiness.totals.sales)}
             </p>
           </div>
 
           <div className="bg-white rounded-lg shadow p-6">
             <h3 className="text-sm font-medium text-gray-500 uppercase">Total Cost</h3>
-            <p className="text-3xl font-bold text-red-600 mt-2">
+            <p className="text-2xl font-bold text-red-600 mt-2">
               {summary ? formatCurrency(summary.totals.cost) : formatCurrency(computedByBusiness.totals.cost)}
             </p>
           </div>
 
           <div className="bg-white rounded-lg shadow p-6">
             <h3 className="text-sm font-medium text-gray-500 uppercase">Net Profit</h3>
-            <p className="text-3xl font-bold text-blue-600 mt-2">
+            <p className="text-2xl font-bold text-blue-600 mt-2">
               {summary ? formatCurrency(summary.totals.profit) : formatCurrency(computedByBusiness.totals.profit)}
             </p>
           </div>
 
           <div className="bg-white rounded-lg shadow p-6">
             <h3 className="text-sm font-medium text-gray-500 uppercase">Pending Payments</h3>
-            <p className="text-3xl font-bold text-yellow-600 mt-2">
+            <p className="text-2xl font-bold text-yellow-600 mt-2">
               {summary ? formatCurrency(summary.totals.pending) : formatCurrency(computedByBusiness.totals.pending)}
             </p>
           </div>
           <div className="bg-white rounded-lg shadow p-6">
             <h3 className="text-sm font-medium text-gray-500 uppercase">Loss</h3>
-            <p className="text-3xl font-bold text-rose-600 mt-2">
+            <p className="text-2xl font-bold text-rose-600 mt-2">
               {summary ? formatCurrency(summary.totals.loss) : '0'}
             </p>
           </div>
