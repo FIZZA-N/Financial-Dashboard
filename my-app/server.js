@@ -35,6 +35,9 @@ const summaryRoutes = loadRouter('./api/routes/summary', 'summary');
 const userRoutes = loadRouter('./api/routes/users', 'users');
 
 // Routes
+app.get('/test', (res,req)=>{
+  return res.json({message: 'Hello World'});
+});
 app.use('/api/auth', authRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/summary', summaryRoutes);
