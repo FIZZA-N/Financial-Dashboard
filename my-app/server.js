@@ -16,11 +16,23 @@ mongoose.connect(MONGODB_URI)
   .then(() => console.log('MongoDB connected'))
   .catch(err => console.error('MongoDB connection error:', err));
 
-// Import Routes
-const authRoutes = require('./api/routes/auth');
-const orderRoutes = require('./api/routes/orders');
-const summaryRoutes = require('./api/routes/summary');
-const userRoutes = require('./api/routes/users');
+// Import Routes with guards (handle default exports/mis-exports)
+const loadRouter = (path, name) => {
+  const mod = require(path);
+  const candidate = typeof mod === 'function'
+    ? mod
+    : (mod && typeof mod.default === 'function' ? mod.default : null);
+  if (!candidate) {
+    console.error(`Invalid router export for ${name}. typeof export=`, typeof mod, 'keys=', mod && Object.keys(mod));
+    throw new TypeError(`${name} router must export a function (Express router).`);
+  }
+  return candidate;
+};
+
+const authRoutes = loadRouter('./api/routes/auth', 'auth');
+const orderRoutes = loadRouter('./api/routes/orders', 'orders');
+const summaryRoutes = loadRouter('./api/routes/summary', 'summary');
+const userRoutes = loadRouter('./api/routes/users', 'users');
 
 // Routes
 app.use('/api/auth', authRoutes);

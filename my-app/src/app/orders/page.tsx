@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { useOrderStore, Order } from '@/store/orderStore';
+import { generateOrderSlip, generateOrdersReport } from '@/lib/pdf';
+import api from '@/lib/api';
 
 export default function OrdersPage() {
   const router = useRouter();
@@ -12,6 +14,12 @@ export default function OrdersPage() {
   
   const [showForm, setShowForm] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<'All'|'Paid'|'Unpaid'|'Partial'>('All');
+  const [businessTypeFilter, setBusinessTypeFilter] = useState<'All'|'Travel'|'Dates'|'Belts'>('All');
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
   const [formData, setFormData] = useState({
     businessType: 'Travel',
     orderId: '',
@@ -33,6 +41,47 @@ export default function OrdersPage() {
       fetchOrders();
     }
   }, [isAuthenticated]);
+
+  const applyFilters = async () => {
+    const params: any = {};
+    if (startDate) params.startDate = new Date(startDate).toISOString();
+    if (endDate) params.endDate = new Date(endDate).toISOString();
+    if (paymentStatusFilter !== 'All') params.paymentStatus = paymentStatusFilter;
+    if (businessTypeFilter !== 'All') params.businessType = businessTypeFilter;
+    await fetchOrders(params);
+    setPage(1);
+  };
+
+  // Delete-by-filter modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [delStart, setDelStart] = useState('');
+  const [delEnd, setDelEnd] = useState('');
+  const [delBusiness, setDelBusiness] = useState<'All'|'Travel'|'Dates'|'Belts'>('All');
+  const [deleting, setDeleting] = useState(false);
+
+  const clearDeleteFilters = () => {
+    setDelStart('');
+    setDelEnd('');
+    setDelBusiness('All');
+  };
+
+  const deleteByFilter = async () => {
+    setDeleting(true);
+    try {
+      const payload: any = {};
+      if (delStart) payload.startDate = new Date(delStart).toISOString();
+      if (delEnd) payload.endDate = new Date(delEnd).toISOString();
+      if (delBusiness !== 'All') payload.businessType = delBusiness;
+      await api.delete('/orders/bulk', { data: payload });
+      setShowDeleteModal(false);
+      clearDeleteFilters();
+      await applyFilters();
+    } catch (e) {
+      console.error('Bulk delete failed', e);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,10 +147,13 @@ export default function OrdersPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-lg">
+      <nav className="bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <h1 className="text-2xl font-bold text-indigo-600">Orders Management</h1>
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold">BD</div>
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-800">Orders Management</h1>
+            </div>
             <div className="flex gap-4">
               <button
                 onClick={() => router.push('/dashboard')}
@@ -115,7 +167,43 @@ export default function OrdersPage() {
       </nav>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-6">
+        {/* Filters */}
+        <div className="bg-white rounded-lg shadow p-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3 md:items-end">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Start</label>
+              <input type="datetime-local" value={startDate} onChange={(e)=>setStartDate(e.target.value)} className="w-full px-3 py-2 border rounded-md" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">End</label>
+              <input type="datetime-local" value={endDate} onChange={(e)=>setEndDate(e.target.value)} className="w-full px-3 py-2 border rounded-md" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Business</label>
+              <select value={businessTypeFilter} onChange={(e)=>setBusinessTypeFilter(e.target.value as any)} className="w-full px-3 py-2 border rounded-md">
+                <option value="All">All</option>
+                <option value="Travel">Travel</option>
+                <option value="Dates">Dates</option>
+                <option value="Belts">Belts</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Payment Status</label>
+              <select value={paymentStatusFilter} onChange={(e)=>setPaymentStatusFilter(e.target.value as any)} className="w-full px-3 py-2 border rounded-md">
+                <option value="All">All</option>
+                <option value="Paid">Paid</option>
+                <option value="Unpaid">Unpaid</option>
+                <option value="Partial">Partial</option>
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={applyFilters} className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Apply</button>
+              <button onClick={()=>{setStartDate('');setEndDate('');setPaymentStatusFilter('All');setBusinessTypeFilter('All');fetchOrders();}} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200">Reset</button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mb-6 flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
           <button
             onClick={() => {
               setShowForm(!showForm);
@@ -138,6 +226,20 @@ export default function OrdersPage() {
           >
             {showForm ? 'Cancel' : '+ Add New Order'}
           </button>
+          <div>
+            <button
+              onClick={() => generateOrdersReport(orders, 'All Orders Report')}
+              className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition"
+            >
+              Export All (PDF)
+            </button>
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="ml-2 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+            >
+              Delete by Filter
+            </button>
+          </div>
         </div>
 
         {showForm && (
@@ -312,7 +414,7 @@ export default function OrdersPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {orders.map((order) => (
+              {orders.slice((page-1)*pageSize, page*pageSize).map((order) => (
                 <tr key={order._id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 py-1 rounded text-xs font-medium ${
@@ -347,9 +449,15 @@ export default function OrdersPage() {
                     </button>
                     <button
                       onClick={() => handleDelete(order._id)}
-                      className="text-red-600 hover:text-red-900"
+                      className="text-red-600 hover:text-red-900 mr-3"
                     >
                       Delete
+                    </button>
+                    <button
+                      onClick={() => generateOrderSlip(order)}
+                      className="text-emerald-600 hover:text-emerald-800"
+                    >
+                      Slip
                     </button>
                   </td>
                 </tr>
@@ -357,7 +465,52 @@ export default function OrdersPage() {
             </tbody>
           </table>
         </div>
+        <div className="flex items-center justify-between mt-4">
+          <div className="text-sm text-gray-600">Page {page} of {Math.max(1, Math.ceil(orders.length / pageSize))}</div>
+          <div className="flex gap-2">
+            <button disabled={page===1} onClick={()=>setPage(p=>Math.max(1,p-1))} className="px-3 py-1 rounded-md bg-gray-100 disabled:opacity-50">Prev</button>
+            <button disabled={page*pageSize>=orders.length} onClick={()=>setPage(p=>p+1)} className="px-3 py-1 rounded-md bg-gray-100 disabled:opacity-50">Next</button>
+          </div>
+        </div>
       </div>
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
+            <h3 className="text-lg font-bold mb-4">Delete Orders by Filter</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Start</label>
+                <input type="datetime-local" value={delStart} onChange={(e)=>setDelStart(e.target.value)} className="w-full px-3 py-2 border rounded-md" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">End</label>
+                <input type="datetime-local" value={delEnd} onChange={(e)=>setDelEnd(e.target.value)} className="w-full px-3 py-2 border rounded-md" />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-medium text-gray-600 mb-1">Business</label>
+                <select value={delBusiness} onChange={(e)=>setDelBusiness(e.target.value as any)} className="w-full px-3 py-2 border rounded-md">
+                  <option value="All">All</option>
+                  <option value="Travel">Travel</option>
+                  <option value="Dates">Dates</option>
+                  <option value="Belts">Belts</option>
+                </select>
+              </div>
+            </div>
+            <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm rounded p-3 mb-4">
+              This action is permanent and cannot be undone.
+            </div>
+            <div className="flex justify-between">
+              <button onClick={clearDeleteFilters} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200">Clear</button>
+              <div className="flex gap-2">
+                <button onClick={()=>setShowDeleteModal(false)} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200">Cancel</button>
+                <button disabled={deleting} onClick={deleteByFilter} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50">
+                  {deleting ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

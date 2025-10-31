@@ -19,6 +19,12 @@
   }
 }
 
+/* Explicit dark mode via .dark on html */
+.dark :root {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
