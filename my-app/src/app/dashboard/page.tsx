@@ -36,6 +36,10 @@ export default function DashboardPage() {
     if (!isAuthenticated()) {
       router.push('/login');
     } else {
+      if (user?.role === 'DataEntry') {
+        router.push('/orders');
+        return;
+      }
       // Initial: current month summary + all orders
       fetchOrders();
       fetchSummary();
