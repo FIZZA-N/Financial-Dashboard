@@ -193,12 +193,20 @@ export default function OrdersPage() {
                   Logout
                 </button>
               ) : (
-                <button
-                  onClick={() => router.push('/dashboard')}
-                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition"
-                >
-                  Dashboard
-                </button>
+                <>
+                  <button
+                    onClick={() => router.push('/dashboard')}
+                    className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition"
+                  >
+                    Dashboard
+                  </button>
+                  <button
+                    onClick={() => router.push('/logs')}
+                    className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition"
+                  >
+                    Logs
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -536,12 +544,14 @@ export default function OrdersPage() {
                     >
                       Edit
                     </button>
-                    <button
-                      onClick={() => handleDelete(order._id)}
-                      className="text-red-600 hover:text-red-900 mr-3"
-                    >
-                      Delete
-                    </button>
+                    {user?.role !== 'DataEntry' && (
+                      <button
+                        onClick={() => handleDelete(order._id)}
+                        className="text-red-600 hover:text-red-900 mr-3"
+                      >
+                        Delete
+                      </button>
+                    )}
                     <button
                       onClick={() => generateOrderSlip(order)}
                       className="text-emerald-600 hover:text-emerald-800"

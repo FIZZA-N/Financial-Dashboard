@@ -141,6 +141,15 @@ export default function DashboardPage() {
               >
                 Orders
               </button>
+              {user?.role === 'Admin' && (
+                <button
+                  onClick={() => router.push('/logs')}
+                  className="hidden sm:inline-flex px-3 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-800"
+                  title="Activity Logs"
+                >
+                  Logs
+                </button>
+              )}
               <div className="hidden sm:flex items-center gap-2 text-sm text-gray-700">
                 <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center font-semibold">
                   {user?.name?.[0]}
