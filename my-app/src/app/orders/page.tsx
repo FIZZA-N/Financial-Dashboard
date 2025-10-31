@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
+import { BellIcon } from '@heroicons/react/24/outline';
 import { useOrderStore, Order } from '@/store/orderStore';
 import { generateOrderSlip, generateOrdersReport } from '@/lib/pdf';
 import api from '@/lib/api';
@@ -10,6 +11,7 @@ import api from '@/lib/api';
 export default function OrdersPage() {
   const router = useRouter();
   const { user, isAuthenticated, logout } = useAuthStore();
+  const [logsCount, setLogsCount] = useState(0);
   const { orders, fetchOrders, createOrder, updateOrder, deleteOrder, loading } = useOrderStore();
   
   const [showForm, setShowForm] = useState(false);
@@ -46,6 +48,22 @@ export default function OrdersPage() {
       fetchOrders();
     }
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (user?.role === 'Admin') {
+      const load = async () => {
+        try {
+          const { data } = await api.get('/users/audit-logs', { params: { limit: 20 } });
+          const lastSeen = Number(localStorage.getItem('logs_last_seen') || '0');
+          const newCount = data.filter((l: any) => new Date(l.createdAt).getTime() > lastSeen).length;
+          setLogsCount(newCount);
+        } catch (e) {}
+      };
+      load();
+      const id = setInterval(load, 30000);
+      return () => clearInterval(id);
+    }
+  }, [user?.role]);
 
   useEffect(() => {
     // Auto-generate ID when opening form for new order
@@ -200,11 +218,11 @@ export default function OrdersPage() {
                   >
                     Dashboard
                   </button>
-                  <button
-                    onClick={() => router.push('/logs')}
-                    className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition"
-                  >
-                    Logs
+                  <button onClick={() => { localStorage.setItem('logs_last_seen', String(Date.now())); setLogsCount(0); router.push('/logs'); }} title="Activity Logs" className="relative inline-flex items-center justify-center h-9 w-9 rounded-md bg-gray-100 hover:bg-gray-200">
+                    <BellIcon className="h-5 w-5 text-gray-700" />
+                    {logsCount > 0 && (
+                      <span className="absolute -top-1 -right-1 text-xs bg-red-600 text-white rounded-full px-1.5 py-0.5">{logsCount}</span>
+                    )}
                   </button>
                 </>
               )}
@@ -292,12 +310,14 @@ export default function OrdersPage() {
             >
               Export All (PDF)
             </button>
-            <button
-              onClick={() => setShowDeleteModal(true)}
-              className="ml-2 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
-            >
-              Delete by Filter
-            </button>
+            {user?.role !== 'DataEntry' && (
+              <button
+                onClick={() => setShowDeleteModal(true)}
+                className="ml-2 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+              >
+                Delete by Filter
+              </button>
+            )}
           </div>
         </div>
 

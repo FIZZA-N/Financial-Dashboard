@@ -6,19 +6,21 @@ import { useAuthStore } from '@/store/authStore';
 import { useOrderStore, Order } from '@/store/orderStore';
 import api from '@/lib/api';
 import { generateBusinessReport } from '@/lib/pdf';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid, LineChart, Line } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from 'recharts';
+import { BellIcon } from '@heroicons/react/24/outline';
 
 interface Summary {
   summary: {
-    Travel: { sales: number; cost: number; profit: number; pending: number; orderCount: number };
-    Dates: { sales: number; cost: number; profit: number; pending: number; orderCount: number };
-    Belts: { sales: number; cost: number; profit: number; pending: number; orderCount: number };
+    Travel: { sales: number; cost: number; profit: number; pending: number; loss: number; orderCount: number };
+    Dates: { sales: number; cost: number; profit: number; pending: number; loss: number; orderCount: number };
+    Belts: { sales: number; cost: number; profit: number; pending: number; loss: number; orderCount: number };
   };
   totals: {
     sales: number;
     cost: number;
     profit: number;
     pending: number;
+    loss: number;
   };
 }
 
@@ -31,6 +33,7 @@ export default function DashboardPage() {
   const [activeBusiness, setActiveBusiness] = useState<'Travel' | 'Dates' | 'Belts' | 'All'>('All');
   const [startDate, setStartDate] = useState<string>(''); // ISO string for datetime-local
   const [endDate, setEndDate] = useState<string>('');
+  const [logsCount, setLogsCount] = useState(0);
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -45,6 +48,22 @@ export default function DashboardPage() {
       fetchSummary();
     }
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (user?.role === 'Admin') {
+      const load = async () => {
+        try {
+          const { data } = await api.get('/users/audit-logs', { params: { limit: 20 } });
+          const lastSeen = Number(localStorage.getItem('logs_last_seen') || '0');
+          const newCount = data.filter((l: any) => new Date(l.createdAt).getTime() > lastSeen).length;
+          setLogsCount(newCount);
+        } catch (e) {}
+      };
+      load();
+      const id = setInterval(load, 30000);
+      return () => clearInterval(id);
+    }
+  }, [user?.role]);
 
   const fetchSummary = async () => {
     setSummaryLoading(true);
@@ -110,9 +129,9 @@ export default function DashboardPage() {
   const pageSize = 10;
 
   const businessChartData = summary ? [
-    { name: 'Travel', sales: summary.summary.Travel.sales, cost: summary.summary.Travel.cost, profit: summary.summary.Travel.profit },
-    { name: 'Dates', sales: summary.summary.Dates.sales, cost: summary.summary.Dates.cost, profit: summary.summary.Dates.profit },
-    { name: 'Belts', sales: summary.summary.Belts.sales, cost: summary.summary.Belts.cost, profit: summary.summary.Belts.profit },
+    { name: 'Travel', sales: summary.summary.Travel.sales, cost: summary.summary.Travel.cost, profit: summary.summary.Travel.profit, loss: summary.summary.Travel.loss },
+    { name: 'Dates', sales: summary.summary.Dates.sales, cost: summary.summary.Dates.cost, profit: summary.summary.Dates.profit, loss: summary.summary.Dates.loss },
+    { name: 'Belts', sales: summary.summary.Belts.sales, cost: summary.summary.Belts.cost, profit: summary.summary.Belts.profit, loss: summary.summary.Belts.loss },
   ] : [];
 
   if (loading || summaryLoading) {
@@ -142,12 +161,11 @@ export default function DashboardPage() {
                 Orders
               </button>
               {user?.role === 'Admin' && (
-                <button
-                  onClick={() => router.push('/logs')}
-                  className="hidden sm:inline-flex px-3 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-800"
-                  title="Activity Logs"
-                >
-                  Logs
+                <button onClick={() => { localStorage.setItem('logs_last_seen', String(Date.now())); setLogsCount(0); router.push('/logs'); }} title="Activity Logs" className="relative inline-flex items-center justify-center h-9 w-9 rounded-md bg-gray-100 hover:bg-gray-200">
+                  <BellIcon className="h-5 w-5 text-gray-700" />
+                  {logsCount > 0 && (
+                    <span className="absolute -top-1 -right-1 text-xs bg-red-600 text-white rounded-full px-1.5 py-0.5">{logsCount}</span>
+                  )}
                 </button>
               )}
               <div className="hidden sm:flex items-center gap-2 text-sm text-gray-700">
@@ -215,7 +233,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
           <div className="bg-white rounded-lg shadow p-6">
             <h3 className="text-sm font-medium text-gray-500 uppercase">Total Sales</h3>
             <p className="text-3xl font-bold text-green-600 mt-2">
@@ -243,6 +261,12 @@ export default function DashboardPage() {
               {summary ? formatCurrency(summary.totals.pending) : formatCurrency(computedByBusiness.totals.pending)}
             </p>
           </div>
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-sm font-medium text-gray-500 uppercase">Loss</h3>
+            <p className="text-3xl font-bold text-rose-600 mt-2">
+              {summary ? formatCurrency(summary.totals.loss) : '0'}
+            </p>
+          </div>
         </div>
 
         <div className="bg-white rounded-lg shadow p-6 mb-8">
@@ -258,8 +282,9 @@ export default function DashboardPage() {
                 <Tooltip />
                 <Legend />
                 <Bar dataKey="sales" fill="#10b981" name="Sales" />
-                <Bar dataKey="cost" fill="#ef4444" name="Cost" />
+                <Bar dataKey="cost" fill="#64748b" name="Cost" />
                 <Bar dataKey="profit" fill="#3b82f6" name="Profit" />
+                <Bar dataKey="loss" fill="#f59e0b" name="Loss" />
               </BarChart>
             </ResponsiveContainer>
           </div>

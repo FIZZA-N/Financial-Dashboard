@@ -30,6 +30,7 @@ router.get('/monthly', auth, async (req, res) => {
     let totalCost = 0;
     let totalProfit = 0;
     let pendingPayments = 0;
+    let totalLoss = 0;
     
     businessTypes.forEach(business => {
       const businessOrders = orders.filter(o => o.businessType === business);
@@ -40,19 +41,22 @@ router.get('/monthly', auth, async (req, res) => {
       const pending = businessOrders
         .filter(o => o.paymentStatus !== 'Paid')
         .reduce((sum, o) => sum + (o.paymentStatus === 'Partial' ? o.sellingPrice * 0.5 : o.sellingPrice), 0);
+      // loss based on paid amount vs cost
+      const loss = businessOrders.reduce((sum, o) => {
+        const tax = (o.taxPercent || 0) / 100;
+        const finalAmount = Math.round((o.sellingPrice * (1 + tax)) * 100) / 100;
+        const paidAmount = o.paymentStatus === 'Paid' ? finalAmount : (o.paymentStatus === 'Partial' ? (o.partialPaidAmount || 0) : 0);
+        const orderLoss = Math.max(0, o.costPrice - paidAmount);
+        return sum + orderLoss;
+      }, 0);
       
-      summary[business] = {
-        sales,
-        cost,
-        profit,
-        pending,
-        orderCount: businessOrders.length
-      };
+      summary[business] = { sales, cost, profit, pending, loss, orderCount: businessOrders.length };
       
       totalSales += sales;
       totalCost += cost;
       totalProfit += profit;
       pendingPayments += pending;
+      totalLoss += loss;
     });
     
     // Investor view - show only 40% of actual profit
@@ -63,12 +67,7 @@ router.get('/monthly', auth, async (req, res) => {
     
     res.json({
       summary,
-      totals: {
-        sales: totalSales,
-        cost: totalCost,
-        profit: displayProfit,
-        pending: pendingPayments
-      },
+      totals: { sales: totalSales, cost: totalCost, profit: displayProfit, pending: pendingPayments, loss: totalLoss },
       period: {
         start: startDate,
         end: endDate
