@@ -98,26 +98,35 @@ export default function DashboardPage() {
   };
 
   const applyRange = async () => {
+    setSummaryLoading(true);
     const params: any = {};
     if (startDate) params.startDate = new Date(startDate).toISOString();
     if (endDate) params.endDate = new Date(endDate).toISOString();
     if (activeBusiness !== 'All') params.businessType = activeBusiness;
     
+    // Fetch filtered orders - this will update the orders in the store
+    // The graph will automatically update because computedByBusiness depends on orders
     await fetchOrders(params);
     
-    // When filters are applied, graph will use computedByBusiness (from filtered orders)
-    // Otherwise, fetch default monthly summary
+    // Clear summary when filters are applied so graph uses filtered orders data
+    // When NO filters are active, fetch default monthly summary
     if (!startDate && !endDate && activeBusiness === 'All') {
       await fetchSummary();
+    } else {
+      // When filters are active, don't use summary - use filtered orders
+      setSummary(null);
     }
-    // Graph will automatically update via computedByBusiness when orders change
+    setSummaryLoading(false);
   };
   
   const clearAllFilters = async () => {
     setStartDate('');
     setEndDate('');
     setActiveBusiness('All');
+    setPage(1);
+    // Fetch all orders (no filters)
     await fetchOrders();
+    // Fetch default monthly summary
     await fetchSummary();
   };
 
@@ -170,18 +179,42 @@ export default function DashboardPage() {
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
-  // Determine if we're using filtered data
+  // Determine if we're using filtered data (date or business filters)
   const hasFilters = startDate || endDate || activeBusiness !== 'All';
-  const useFilteredData = hasFilters && orders.length > 0;
+  
+  // IMPORTANT: When filters are applied, we MUST use computedByBusiness (from filtered orders)
+  // The fetchOrders with params will filter the orders in the store, so computedByBusiness
+  // will automatically reflect the filtered data
+  const useFilteredData = hasFilters;
 
-  // Graph data: use filtered orders when filters are active, otherwise use summary
+  // Graph data: ALWAYS use filtered orders when date/business filters are active
+  // This ensures graph shows same data as the orders table
   const businessChartData = useMemo(() => {
+    // When filters are active, use computedByBusiness (which uses filtered orders)
     if (useFilteredData) {
       // Use computed data from filtered orders
       const data = [
-        { name: 'Travel', sales: computedByBusiness.groups.Travel.sales, cost: computedByBusiness.groups.Travel.cost, profit: computedByBusiness.groups.Travel.profit, loss: computedByBusiness.groups.Travel.loss },
-        { name: 'Dates', sales: computedByBusiness.groups.Dates.sales, cost: computedByBusiness.groups.Dates.cost, profit: computedByBusiness.groups.Dates.profit, loss: computedByBusiness.groups.Dates.loss },
-        { name: 'Belts', sales: computedByBusiness.groups.Belts.sales, cost: computedByBusiness.groups.Belts.cost, profit: computedByBusiness.groups.Belts.profit, loss: computedByBusiness.groups.Belts.loss },
+        { 
+          name: 'Travel', 
+          sales: computedByBusiness.groups.Travel.sales, 
+          cost: computedByBusiness.groups.Travel.cost, 
+          profit: computedByBusiness.groups.Travel.profit, 
+          loss: computedByBusiness.groups.Travel.loss 
+        },
+        { 
+          name: 'Dates', 
+          sales: computedByBusiness.groups.Dates.sales, 
+          cost: computedByBusiness.groups.Dates.cost, 
+          profit: computedByBusiness.groups.Dates.profit, 
+          loss: computedByBusiness.groups.Dates.loss 
+        },
+        { 
+          name: 'Belts', 
+          sales: computedByBusiness.groups.Belts.sales, 
+          cost: computedByBusiness.groups.Belts.cost, 
+          profit: computedByBusiness.groups.Belts.profit, 
+          loss: computedByBusiness.groups.Belts.loss 
+        },
       ];
       
       // Filter by activeBusiness if not 'All'
@@ -190,14 +223,32 @@ export default function DashboardPage() {
       }
       return data;
     } else if (summary) {
-      // Use API summary data
+      // Use API summary data only when NO filters are active
       const data = [
-        { name: 'Travel', sales: summary.summary.Travel.sales, cost: summary.summary.Travel.cost, profit: summary.summary.Travel.profit, loss: summary.summary.Travel.loss },
-        { name: 'Dates', sales: summary.summary.Dates.sales, cost: summary.summary.Dates.cost, profit: summary.summary.Dates.profit, loss: summary.summary.Dates.loss },
-        { name: 'Belts', sales: summary.summary.Belts.sales, cost: summary.summary.Belts.cost, profit: summary.summary.Belts.profit, loss: summary.summary.Belts.loss },
+        { 
+          name: 'Travel', 
+          sales: summary.summary.Travel.sales, 
+          cost: summary.summary.Travel.cost, 
+          profit: summary.summary.Travel.profit, 
+          loss: summary.summary.Travel.loss 
+        },
+        { 
+          name: 'Dates', 
+          sales: summary.summary.Dates.sales, 
+          cost: summary.summary.Dates.cost, 
+          profit: summary.summary.Dates.profit, 
+          loss: summary.summary.Dates.loss 
+        },
+        { 
+          name: 'Belts', 
+          sales: summary.summary.Belts.sales, 
+          cost: summary.summary.Belts.cost, 
+          profit: summary.summary.Belts.profit, 
+          loss: summary.summary.Belts.loss 
+        },
       ];
       
-      // Filter by activeBusiness if not 'All'
+      // Filter by activeBusiness if not 'All' (shouldn't happen without filters, but just in case)
       if (activeBusiness !== 'All') {
         return data.filter(item => item.name === activeBusiness);
       }
@@ -206,11 +257,14 @@ export default function DashboardPage() {
     return [];
   }, [useFilteredData, computedByBusiness, summary, activeBusiness]);
 
-  // Get display totals: use filtered data if filters are active, otherwise use summary
+  // Get display totals: ALWAYS use filtered orders data when filters are active
+  // This ensures totals match what's shown in the graph and orders table
   const displayTotals = useMemo(() => {
     if (useFilteredData) {
+      // Use computed totals from filtered orders
       return computedByBusiness.totals;
     } else if (summary) {
+      // Use API summary totals only when NO filters are active
       return summary.totals;
     }
     return { sales: 0, cost: 0, profit: 0, pending: 0, loss: 0 };
