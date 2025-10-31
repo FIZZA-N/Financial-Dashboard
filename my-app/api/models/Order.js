@@ -35,6 +35,21 @@ const OrderSchema = new mongoose.Schema({
     required: true,
     min: 0
   },
+  // Optional tax percent applied on selling price to compute finalAmount
+  taxPercent: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 100
+  },
+  // Final amount customer owes (sellingPrice + tax)
+  finalAmount: {
+    type: Number,
+    default: function() {
+      const tax = (this.taxPercent || 0) / 100;
+      return Math.round((this.sellingPrice * (1 + tax)) * 100) / 100;
+    }
+  },
   paymentStatus: {
     type: String,
     required: true,
@@ -59,10 +74,30 @@ const OrderSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
+  // Profit calculated from finalAmount (includes tax) minus cost
   profit: {
     type: Number,
     default: function() {
-      return this.sellingPrice - this.costPrice;
+      const tax = (this.taxPercent || 0) / 100;
+      const finalAmount = Math.round((this.sellingPrice * (1 + tax)) * 100) / 100;
+      return finalAmount - this.costPrice;
+    }
+  },
+  // Partial payment tracking (used when paymentStatus === 'Partial')
+  partialPaidAmount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  partialRemainingAmount: {
+    type: Number,
+    default: function() {
+      if (this.paymentStatus !== 'Partial') return 0;
+      const tax = (this.taxPercent || 0) / 100;
+      const finalAmount = Math.round((this.sellingPrice * (1 + tax)) * 100) / 100;
+      const paid = this.partialPaidAmount || 0;
+      const remaining = Math.max(0, finalAmount - paid);
+      return Math.round(remaining * 100) / 100;
     }
   }
 }, {

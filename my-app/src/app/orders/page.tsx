@@ -9,7 +9,7 @@ import api from '@/lib/api';
 
 export default function OrdersPage() {
   const router = useRouter();
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated, logout } = useAuthStore();
   const { orders, fetchOrders, createOrder, updateOrder, deleteOrder, loading } = useOrderStore();
   
   const [showForm, setShowForm] = useState(false);
@@ -20,6 +20,8 @@ export default function OrdersPage() {
   const [businessTypeFilter, setBusinessTypeFilter] = useState<'All'|'Travel'|'Dates'|'Belts'>('All');
   const [page, setPage] = useState(1);
   const pageSize = 10;
+  const generateId = () => String(Math.floor(10000 + Math.random() * 90000));
+
   const [formData, setFormData] = useState({
     businessType: 'Travel',
     orderId: '',
@@ -29,6 +31,8 @@ export default function OrdersPage() {
     costPrice: 0,
     sellingPrice: 0,
     taxPercent: 0,
+    partialPaidAmount: 0,
+    partialRemainingAmount: 0,
     paymentStatus: 'Unpaid',
     paymentMethod: 'Cash',
     customerSupplierName: '',
@@ -42,6 +46,25 @@ export default function OrdersPage() {
       fetchOrders();
     }
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    // Auto-generate ID when opening form for new order
+    if (showForm && !editingOrder && !formData.orderId) {
+      setFormData(prev => ({ ...prev, orderId: generateId() }));
+    }
+  }, [showForm, editingOrder]);
+
+  useEffect(() => {
+    // Recompute remaining for Partial
+    if (formData.paymentStatus === 'Partial') {
+      const tax = (formData.taxPercent || 0) / 100;
+      const finalAmount = Math.round((formData.sellingPrice * (1 + tax)) * 100) / 100;
+      const remaining = Math.max(0, finalAmount - (formData.partialPaidAmount || 0));
+      if (remaining !== formData.partialRemainingAmount) {
+        setFormData(prev => ({ ...prev, partialRemainingAmount: Math.round(remaining * 100) / 100 }));
+      }
+    }
+  }, [formData.paymentStatus, formData.taxPercent, formData.sellingPrice, formData.partialPaidAmount]);
 
   const applyFilters = async () => {
     const params: any = {};
@@ -105,6 +128,8 @@ export default function OrdersPage() {
         costPrice: 0,
         sellingPrice: 0,
         taxPercent: 0,
+        partialPaidAmount: 0,
+        partialRemainingAmount: 0,
         paymentStatus: 'Unpaid',
         paymentMethod: 'Cash',
         customerSupplierName: '',
@@ -126,6 +151,8 @@ export default function OrdersPage() {
       costPrice: order.costPrice,
       sellingPrice: order.sellingPrice,
       taxPercent: (order as any).taxPercent || 0,
+      partialPaidAmount: (order as any).partialPaidAmount || 0,
+      partialRemainingAmount: (order as any).partialRemainingAmount || 0,
       paymentStatus: order.paymentStatus,
       paymentMethod: order.paymentMethod,
       customerSupplierName: order.customerSupplierName,
@@ -158,12 +185,21 @@ export default function OrdersPage() {
               <h1 className="text-xl sm:text-2xl font-bold text-gray-800">Orders Management</h1>
             </div>
             <div className="flex gap-4">
-              <button
-                onClick={() => router.push('/dashboard')}
-                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition"
-              >
-                Dashboard
-              </button>
+              {user?.role === 'DataEntry' ? (
+                <button
+                  onClick={logout}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+                >
+                  Logout
+                </button>
+              ) : (
+                <button
+                  onClick={() => router.push('/dashboard')}
+                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition"
+                >
+                  Dashboard
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -172,7 +208,7 @@ export default function OrdersPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Filters */}
         <div className="bg-white rounded-lg shadow p-4 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-3 md:items-end">
+          <div className="grid grid-cols-1 md:grid-cols-7 gap-3 md:items-end">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Start</label>
               <input type="datetime-local" value={startDate} onChange={(e)=>setStartDate(e.target.value)} className="w-full px-3 py-2 border rounded-md" />
@@ -199,6 +235,18 @@ export default function OrdersPage() {
                 <option value="Partial">Partial</option>
               </select>
             </div>
+            {paymentStatusFilter === 'Partial' && (
+              <>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Min Remaining</label>
+                  <input id="minRemaining" name="minRemaining" type="number" step="0.01" className="w-full px-3 py-2 border rounded-md" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Max Remaining</label>
+                  <input id="maxRemaining" name="maxRemaining" type="number" step="0.01" className="w-full px-3 py-2 border rounded-md" />
+                </div>
+              </>
+            )}
             <div className="flex gap-2">
               <button onClick={applyFilters} className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Apply</button>
               <button onClick={()=>{setStartDate('');setEndDate('');setPaymentStatusFilter('All');setBusinessTypeFilter('All');fetchOrders();}} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200">Reset</button>
@@ -365,6 +413,31 @@ export default function OrdersPage() {
                   <option value="Partial">Partial</option>
                 </select>
               </div>
+
+              {formData.paymentStatus === 'Partial' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Paid Amount</label>
+                    <input
+                      type="number"
+                      value={formData.partialPaidAmount}
+                      onChange={(e) => setFormData({ ...formData, partialPaidAmount: parseFloat(e.target.value || '0') })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Remaining Amount</label>
+                    <input
+                      type="number"
+                      value={formData.partialRemainingAmount}
+                      readOnly
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50"
+                    />
+                  </div>
+                </>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
