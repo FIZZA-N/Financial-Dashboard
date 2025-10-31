@@ -34,6 +34,29 @@ function buildDiff(changes: any): DiffItem[] {
   return diffs;
 }
 
+function renderValue(val: any): string {
+  if (val == null) return '—';
+  if (Array.isArray(val)) {
+    const items = val.map((v) => {
+      if (v && typeof v === 'object') {
+        const oid = (v as any).orderId || (v as any)._id || '';
+        const name = (v as any).productServiceName || (v as any).name || '';
+        return [oid, name].filter(Boolean).join(' - ');
+      }
+      return String(v);
+    });
+    return items.join(', ');
+  }
+  if (typeof val === 'object') {
+    const keys = ['orderId','productServiceName','paymentStatus','costPrice','sellingPrice','partialPaidAmount','partialRemainingAmount','name','email','role'];
+    const picked: any = {};
+    keys.forEach(k => { if (val[k] !== undefined) picked[k] = val[k]; });
+    const toShow = Object.keys(picked).length ? picked : val;
+    try { return JSON.stringify(toShow); } catch { return String(val); }
+  }
+  return String(val);
+}
+
 export default function LogsPage() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
@@ -226,8 +249,8 @@ export default function LogsPage() {
                             {diffs.map((d, idx) => (
                               <tr key={idx} className="hover:bg-gray-50">
                                 <td className="px-4 py-2 font-medium text-gray-800">{d.field}</td>
-                                <td className="px-4 py-2 text-gray-700">{String(d.before)}</td>
-                                <td className="px-4 py-2 text-gray-900 font-semibold">{String(d.after)}</td>
+                                <td className="px-4 py-2 text-gray-700">{renderValue(d.before)}</td>
+                                <td className="px-4 py-2 text-gray-900 font-semibold">{renderValue(d.after)}</td>
                               </tr>
                             ))}
                           </tbody>

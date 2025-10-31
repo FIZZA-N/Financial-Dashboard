@@ -304,6 +304,13 @@ export default function DashboardPage() {
                   )}
                 </button>
               )}
+              <button
+                onClick={() => router.push('/reminders')}
+                className="hidden sm:inline-flex px-3 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700"
+                title="Payment Reminders"
+              >
+                Reminders
+              </button>
               <div className="hidden sm:flex items-center gap-2 text-sm text-gray-700">
                 <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center font-semibold">
                   {user?.name?.[0]}

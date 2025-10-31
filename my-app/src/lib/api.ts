@@ -25,7 +25,7 @@ if (typeof window !== 'undefined') {
       const status = error?.response?.status;
       const msg = error?.response?.data?.message || error?.message || 'Request failed';
       const path = error?.config?.url || '';
-      toast.error(`${msg}${path ? `\n${path}` : ''}`);
+       toast.error(`${msg}${path ? `\n${path}` : ''}`);
       return Promise.reject(error);
     }
   );

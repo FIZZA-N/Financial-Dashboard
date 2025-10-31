@@ -4,6 +4,7 @@ import "./globals.css";
 import ThemeToggle from "@/components/ThemeToggle";
 import Toaster from "@/components/Toaster";
 import ClientSessionGuard from "@/components/ClientSessionGuard";
+import ReminderWatcher from "@/components/ReminderWatcher";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -35,6 +36,7 @@ export default function RootLayout({
         </div>
         <Toaster />
         <ClientSessionGuard />
+        <ReminderWatcher />
         {children}
       </body>
     </html>

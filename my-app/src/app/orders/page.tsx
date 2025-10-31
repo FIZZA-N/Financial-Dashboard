@@ -218,6 +218,12 @@ export default function OrdersPage() {
                   >
                     Dashboard
                   </button>
+                  <button
+                    onClick={() => router.push('/reminders')}
+                    className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition"
+                  >
+                    Reminders
+                  </button>
                   <button onClick={() => { localStorage.setItem('logs_last_seen', String(Date.now())); setLogsCount(0); router.push('/logs'); }} title="Activity Logs" className="relative inline-flex items-center justify-center h-9 w-9 rounded-md bg-gray-100 hover:bg-gray-200">
                     <BellIcon className="h-5 w-5 text-gray-700" />
                     {logsCount > 0 && (
