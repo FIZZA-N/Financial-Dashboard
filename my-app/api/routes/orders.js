@@ -103,22 +103,7 @@ router.put('/:id', auth, audit('UPDATE', 'Order'), async (req, res) => {
   }
 });
 
-// Delete order
-router.delete('/:id', auth, audit('DELETE', 'Order'), async (req, res) => {
-  try {
-    if (req.user.role === 'DataEntry') return res.status(403).json({ message: 'DataEntry is not allowed to delete orders' });
-    // capture before for audit
-    res.locals.entityBefore = await Order.findById(req.params.id).lean();
-    const order = await Order.findByIdAndDelete(req.params.id);
-    if (!order) return res.status(404).json({ message: 'Order not found' });
-    res.json({ message: 'Order deleted' });
-  } catch (error) {
-    console.error('Delete order error:', error);
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Bulk delete by filters
+// Bulk delete by filters (must be BEFORE ':id' route to avoid routing conflicts)
 router.delete('/bulk', auth, audit('DELETE', 'Order'), async (req, res) => {
   try {
     if (req.user.role === 'DataEntry') return res.status(403).json({ message: 'DataEntry is not allowed to delete orders' });
@@ -137,6 +122,21 @@ router.delete('/bulk', auth, audit('DELETE', 'Order'), async (req, res) => {
     res.json({ deletedCount: result.deletedCount });
   } catch (error) {
     console.error('Bulk delete error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Delete order
+router.delete('/:id', auth, audit('DELETE', 'Order'), async (req, res) => {
+  try {
+    if (req.user.role === 'DataEntry') return res.status(403).json({ message: 'DataEntry is not allowed to delete orders' });
+    // capture before for audit
+    res.locals.entityBefore = await Order.findById(req.params.id).lean();
+    const order = await Order.findByIdAndDelete(req.params.id);
+    if (!order) return res.status(404).json({ message: 'Order not found' });
+    res.json({ message: 'Order deleted' });
+  } catch (error) {
+    console.error('Delete order error:', error);
     res.status(500).json({ message: error.message });
   }
 });
