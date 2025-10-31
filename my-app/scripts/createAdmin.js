@@ -23,14 +23,15 @@ async function main() {
   const name = process.env.SEED_ADMIN_NAME || 'Admin User';
   const email = process.env.SEED_ADMIN_EMAIL || 'admin@example.com';
   const password = process.env.SEED_ADMIN_PASSWORD || 'Admin@12345';
+  const role = process.env.SEED_ROLE || 'Admin';
 
   let user = await User.findOne({ email });
   if (user) {
     console.log(`Admin already exists: ${email}`);
   } else {
-    user = new User({ name, email, password, role: 'Admin' });
+    user = new User({ name, email, password, role });
     await user.save();
-    console.log(`Admin created: ${email}`);
+    console.log(`${role} created: ${email}`);
   }
 
   await mongoose.disconnect();

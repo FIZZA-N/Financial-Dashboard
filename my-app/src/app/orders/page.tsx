@@ -28,6 +28,7 @@ export default function OrdersPage() {
     quantity: 0,
     costPrice: 0,
     sellingPrice: 0,
+    taxPercent: 0,
     paymentStatus: 'Unpaid',
     paymentMethod: 'Cash',
     customerSupplierName: '',
@@ -103,6 +104,7 @@ export default function OrdersPage() {
         quantity: 0,
         costPrice: 0,
         sellingPrice: 0,
+        taxPercent: 0,
         paymentStatus: 'Unpaid',
         paymentMethod: 'Cash',
         customerSupplierName: '',
@@ -123,6 +125,7 @@ export default function OrdersPage() {
       quantity: order.quantity,
       costPrice: order.costPrice,
       sellingPrice: order.sellingPrice,
+      taxPercent: (order as any).taxPercent || 0,
       paymentStatus: order.paymentStatus,
       paymentMethod: order.paymentMethod,
       customerSupplierName: order.customerSupplierName,
@@ -266,8 +269,8 @@ export default function OrdersPage() {
                   type="text"
                   value={formData.orderId}
                   onChange={(e) => setFormData({ ...formData, orderId: e.target.value })}
+                  placeholder="Auto-generated if left blank"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                  required
                 />
               </div>
 
@@ -333,6 +336,19 @@ export default function OrdersPage() {
                   required
                   min="0"
                   step="0.01"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tax (%)</label>
+                <input
+                  type="number"
+                  value={formData.taxPercent}
+                  onChange={(e) => setFormData({ ...formData, taxPercent: parseFloat(e.target.value || '0') })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                  min="0"
+                  step="0.01"
+                  placeholder="Optional"
                 />
               </div>
 

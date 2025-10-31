@@ -161,7 +161,7 @@ export default function DashboardPage() {
         {/* Filters */}
         <div className="bg-white rounded-lg shadow p-4 mb-6">
           <div className="flex flex-col md:flex-row gap-3 md:items-end md:justify-between">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Start</label>
                 <input
@@ -180,10 +180,24 @@ export default function DashboardPage() {
                   className="w-full px-3 py-2 border rounded-md"
                 />
               </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Business</label>
+                <select
+                  value={activeBusiness}
+                  onChange={(e)=>{ setActiveBusiness(e.target.value as any); setPage(1); }}
+                  className="w-full px-3 py-2 border rounded-md"
+                >
+                  <option value="All">All</option>
+                  <option value="Travel">Travel</option>
+                  <option value="Dates">Dates</option>
+                  <option value="Belts">Belts</option>
+                </select>
+              </div>
             </div>
             <div className="flex gap-2">
               <button onClick={syncToNow} className="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200">Now</button>
               <button onClick={applyRange} className="px-3 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Apply</button>
+              <button onClick={()=>{ setStartDate(''); setEndDate(''); setActiveBusiness('All'); fetchOrders(); }} className="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200">Clear All</button>
             </div>
           </div>
         </div>
