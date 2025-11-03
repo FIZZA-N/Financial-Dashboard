@@ -56,6 +56,11 @@ export default function OrdersPage() {
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [suggestions, setSuggestions] = useState<Array<any>>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<'All'|'Paid'|'Unpaid'|'Partial'>('All');
   const [businessTypeFilter, setBusinessTypeFilter] = useState<'All'|'Travel'|'Dates'|'Belts'>('All');
   const [page, setPage] = useState(1);
@@ -97,6 +102,39 @@ export default function OrdersPage() {
       fetchOrders();
     }
   }, [isAuthenticated]);
+
+  // Debounced suggestions for orderId (Bill No)
+  useEffect(() => {
+    let id: any;
+    if (searchTerm === '') {
+      // clear search -> refetch default
+      id = setTimeout(() => {
+        fetchOrders();
+        setIsSearching(false);
+        setSuggestions([]);
+        setShowSuggestions(false);
+      }, 200);
+      return () => clearTimeout(id);
+    }
+
+    setIsSearching(true);
+    id = setTimeout(async () => {
+      try {
+        const { data } = await api.get('/orders/search', { params: { q: searchTerm, limit: 10 } });
+        setSuggestions(data || []);
+        setShowSuggestions(true);
+        setHighlightedIndex(-1);
+      } catch (e) {
+        console.error('Suggestion fetch failed', e);
+        setSuggestions([]);
+        setShowSuggestions(false);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(id);
+  }, [searchTerm]);
 
   useEffect(() => {
     if (user?.role === 'Admin') {
@@ -357,6 +395,81 @@ export default function OrdersPage() {
             resetFilters={resetFilters}
           />
 
+          {/* Search bar and loader */}
+          <div className="mt-4 mb-4 flex items-center gap-3">
+            <div className="relative flex-1">
+              <input
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={(e) => {
+                  // Keyboard navigation for suggestions and Enter to trigger selection/search
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setHighlightedIndex(i => Math.min((suggestions.length - 1), (i + 1)));
+                    setShowSuggestions(true);
+                    return;
+                  }
+                  if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setHighlightedIndex(i => Math.max(-1, (i - 1)));
+                    return;
+                  }
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (highlightedIndex >= 0 && suggestions[highlightedIndex]) {
+                      const s = suggestions[highlightedIndex];
+                      setSearchTerm(s.orderId);
+                      setShowSuggestions(false);
+                      fetchOrders({ orderId: s.orderId });
+                    } else {
+                      // No suggestion selected -> perform search by orderId
+                      setShowSuggestions(false);
+                      fetchOrders({ orderId: searchTerm });
+                    }
+                  }
+                }}
+                onBlur={() => {
+                  // small delay to allow click selection
+                  setTimeout(() => setShowSuggestions(false), 150);
+                }}
+                onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+                placeholder="Search by Bill No / Order ID"
+                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              {isSearching && (
+                <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                  <svg className="animate-spin h-5 w-5 text-gray-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                  </svg>
+                </div>
+              )}
+
+              {/* Suggestions dropdown */}
+              {showSuggestions && suggestions.length > 0 && (
+                <ul className="absolute z-40 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow max-h-60 overflow-auto">
+                  {suggestions.map((s, idx) => (
+                    <li
+                      key={s._id}
+                      onMouseDown={(ev) => { ev.preventDefault(); /* prevent blur */ }}
+                      onClick={() => { setSearchTerm(s.orderId); setShowSuggestions(false); fetchOrders({ orderId: s.orderId }); }}
+                      className={`px-3 py-2 cursor-pointer hover:bg-gray-100 ${idx === highlightedIndex ? 'bg-indigo-50' : ''}`}
+                    >
+                      <div className="text-sm font-medium">{s.orderId}</div>
+                      <div className="text-xs text-gray-500">{s.customerSupplierName || (s.customer && s.customer.name) || s.customerPhone || ''}</div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <button
+              onClick={() => { setSearchTerm(''); setSuggestions([]); fetchOrders(); }}
+              className="px-3 py-2 bg-gray-100 rounded-md hover:bg-gray-200"
+            >
+              Clear
+            </button>
+          </div>
+
           <HeaderActions
             showForm={showForm}
             openAddOrderForm={openAddOrderForm}
@@ -374,6 +487,17 @@ export default function OrdersPage() {
             setFormData={setFormData}
             handleSubmit={handleSubmit}
           />
+
+          {/* Full-screen loader overlay when fetching large data sets or initial load */}
+          {loading && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/80">
+              <div className="text-center">
+                <div className="inline-flex items-center justify-center w-16 h-16 border-4 border-t-indigo-500 border-gray-200 rounded-full animate-spin mb-4"></div>
+                <div className="text-lg font-medium text-gray-700">Loading orders...</div>
+                <div className="text-sm text-gray-500">This may take a moment if the dataset is large.</div>
+              </div>
+            </div>
+          )}
 
           <OrdersTable
             orders={orders}
