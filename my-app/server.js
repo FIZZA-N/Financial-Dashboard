@@ -33,6 +33,7 @@ const authRoutes = loadRouter('./api/routes/auth', 'auth');
 const orderRoutes = loadRouter('./api/routes/orders', 'orders');
 const summaryRoutes = loadRouter('./api/routes/summary', 'summary');
 const userRoutes = loadRouter('./api/routes/users', 'users');
+const productRoutes = loadRouter('./api/routes/products', 'products');
 
 // Routes
 app.get('/test', (req, res)=>{
@@ -42,6 +43,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/summary', summaryRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/products', productRoutes);
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {

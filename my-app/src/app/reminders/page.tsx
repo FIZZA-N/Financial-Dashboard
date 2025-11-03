@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import api from '@/lib/api';
+import Sidebar from '@/components/Sidebar';
 
 type Order = {
   _id: string;
@@ -45,20 +46,17 @@ export default function RemindersPage() {
   }, [orders]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-800">Payment Reminders</h1>
-            <div className="flex gap-2">
-              <button onClick={()=>router.push('/dashboard')} className="px-4 py-2 bg-gray-600 text-white rounded-md">Dashboard</button>
-              <button onClick={()=>router.push('/orders')} className="px-4 py-2 bg-indigo-600 text-white rounded-md">Orders</button>
-            </div>
+    <div className="min-h-screen bg-gray-50 flex">
+      <Sidebar />
+      <div className="flex-1">
+        <nav className="bg-white border-b sticky top-0 z-50">
+          <div className="px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
+            <div className="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold">PS</div>
+            <button onClick={()=>router.push('/orders')} className="px-3 py-1.5 bg-indigo-600 text-white rounded-md">Orders</button>
           </div>
-        </div>
-      </nav>
+        </nav>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-white rounded-lg shadow p-4 mb-6 flex items-center justify-between">
           <div className="text-gray-700">Showing unpaid/partial orders older than 1 minute (testing)</div>
           <button onClick={load} className="px-4 py-2 bg-indigo-600 text-white rounded-md">Refresh</button>
@@ -98,6 +96,7 @@ export default function RemindersPage() {
               )}
             </tbody>
           </table>
+        </div>
         </div>
       </div>
     </div>

@@ -3,10 +3,29 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
+import Sidebar from '@/components/Sidebar';
 import { BellIcon } from '@heroicons/react/24/outline';
 import { useOrderStore, Order } from '@/store/orderStore';
 import { generateOrderSlip, generateOrdersReport } from '@/lib/pdf';
 import api from '@/lib/api';
+
+type BusinessType = 'Travel' | 'Dates' | 'Belts';
+type FormData = {
+  businessType: BusinessType;
+  orderId: string;
+  orderType: 'Retail' | 'Shopify' | 'Preorder' | 'Wholesale' | 'Service';
+  productServiceName: string;
+  quantity: number;
+  costPrice: number;
+  sellingPrice: number;
+  taxPercent: number;
+  partialPaidAmount: number;
+  partialRemainingAmount: number;
+  paymentStatus: 'Paid' | 'Unpaid' | 'Partial';
+  paymentMethod: 'Cash' | 'Bank' | 'JazzCash' | 'Online';
+  customerSupplierName: string;
+  remarks: string;
+};
 
 export default function OrdersPage() {
   const router = useRouter();
@@ -24,7 +43,7 @@ export default function OrdersPage() {
   const pageSize = 10;
   const generateId = () => String(Math.floor(10000 + Math.random() * 90000));
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     businessType: 'Travel',
     orderId: '',
     orderType: 'Retail',
@@ -41,6 +60,10 @@ export default function OrdersPage() {
     remarks: ''
   });
 
+  // Products for Dates
+  const [products, setProducts] = useState<{ _id: string; name: string; basePrice: number; baseCost?: number }[]>([]);
+  const [productQuery, setProductQuery] = useState('');
+
   useEffect(() => {
     if (!isAuthenticated()) {
       router.push('/login');
@@ -48,6 +71,18 @@ export default function OrdersPage() {
       fetchOrders();
     }
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    const loadProducts = async () => {
+      if (formData.businessType === 'Dates') {
+        const { data } = await api.get('/products', { params: { businessType: 'Dates', q: productQuery || undefined } });
+        setProducts(data);
+      } else {
+        setProducts([]);
+      }
+    };
+    loadProducts();
+  }, [formData.businessType, productQuery, showForm]);
 
   useEffect(() => {
     if (user?.role === 'Admin') {
@@ -83,6 +118,17 @@ export default function OrdersPage() {
       }
     }
   }, [formData.paymentStatus, formData.taxPercent, formData.sellingPrice, formData.partialPaidAmount]);
+
+  // When product changes or quantity changes for Dates, auto-price
+  useEffect(() => {
+    if (formData.businessType === 'Dates') {
+      const selected = products.find(p => p.name === formData.productServiceName);
+      if (selected) {
+        const price = (selected.basePrice || 0) * Math.max(1, Number(formData.quantity || 0));
+        setFormData(prev => ({ ...prev, sellingPrice: price, costPrice: (selected.baseCost || 0) * Math.max(1, Number(prev.quantity || 0)) }));
+      }
+    }
+  }, [formData.productServiceName, formData.quantity, formData.businessType, products]);
 
   const applyFilters = async () => {
     const params: any = {};
@@ -194,50 +240,17 @@ export default function OrdersPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-3">
-              <div className="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold">BD</div>
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-800">Orders Management</h1>
-            </div>
-            <div className="flex gap-4">
-              {user?.role === 'DataEntry' ? (
-                <button
-                  onClick={logout}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
-                >
-                  Logout
-                </button>
-              ) : (
-                <>
-                  <button
-                    onClick={() => router.push('/dashboard')}
-                    className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition"
-                  >
-                    Dashboard
-                  </button>
-                  <button
-                    onClick={() => router.push('/reminders')}
-                    className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition"
-                  >
-                    Reminders
-                  </button>
-                  <button onClick={() => { localStorage.setItem('logs_last_seen', String(Date.now())); setLogsCount(0); router.push('/logs'); }} title="Activity Logs" className="relative inline-flex items-center justify-center h-9 w-9 rounded-md bg-gray-100 hover:bg-gray-200">
-                    <BellIcon className="h-5 w-5 text-gray-700" />
-                    {logsCount > 0 && (
-                      <span className="absolute -top-1 -right-1 text-xs bg-red-600 text-white rounded-full px-1.5 py-0.5">{logsCount}</span>
-                    )}
-                  </button>
-                </>
-              )}
-            </div>
+    <div className="min-h-screen bg-gray-50 flex">
+      <Sidebar isAdmin={user?.role==='Admin'} />
+      <div className="flex-1">
+        <nav className="bg-white border-b sticky top-0 z-50">
+          <div className="px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
+            <div className="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold">BD</div>
+            <button onClick={logout} className="px-3 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700">Sign out</button>
           </div>
-        </div>
-      </nav>
+        </nav>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="px-4 sm:px-6 lg:px-8 py-8">
         {/* Filters */}
         <div className="bg-white rounded-lg shadow p-4 mb-6">
           <div className="grid grid-cols-1 md:grid-cols-7 gap-3 md:items-end">
@@ -286,7 +299,7 @@ export default function OrdersPage() {
           </div>
         </div>
 
-        <div className="mb-6 flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+            <div className="mb-6 flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
           <button
             onClick={() => {
               setShowForm(!showForm);
@@ -299,6 +312,9 @@ export default function OrdersPage() {
                 quantity: 0,
                 costPrice: 0,
                 sellingPrice: 0,
+                taxPercent: 0,
+                partialPaidAmount: 0,
+                partialRemainingAmount: 0,
                 paymentStatus: 'Unpaid',
                 paymentMethod: 'Cash',
                 customerSupplierName: '',
@@ -310,12 +326,18 @@ export default function OrdersPage() {
             {showForm ? 'Cancel' : '+ Add New Order'}
           </button>
           <div>
-            <button
+                  <button
               onClick={() => generateOrdersReport(orders, 'All Orders Report')}
               className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition"
             >
               Export All (PDF)
             </button>
+                  <button
+                    onClick={() => router.push('/products')}
+                    className="ml-2 px-6 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition"
+                  >
+                    Products
+                  </button>
             {user?.role !== 'DataEntry' && (
               <button
                 onClick={() => setShowDeleteModal(true)}
@@ -328,9 +350,13 @@ export default function OrdersPage() {
         </div>
 
         {showForm && (
-          <div className="bg-white rounded-lg shadow p-6 mb-8">
-            <h2 className="text-xl font-bold mb-4">{editingOrder ? 'Edit Order' : 'New Order'}</h2>
-            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold">{editingOrder ? 'Edit Order' : 'New Order'}</h2>
+                <button onClick={()=>setShowForm(false)} type="button" className="text-gray-500 hover:text-gray-800">✕</button>
+              </div>
+              <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Business Type</label>
                 <select
@@ -373,14 +399,37 @@ export default function OrdersPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Product/Service Name</label>
-                <input
-                  type="text"
-                  value={formData.productServiceName}
-                  onChange={(e) => setFormData({ ...formData, productServiceName: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                  required
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Product/Service</label>
+                {formData.businessType === 'Dates' ? (
+                  <div>
+                    <input
+                      type="text"
+                      placeholder="Search product..."
+                      value={productQuery}
+                      onChange={(e)=>setProductQuery(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-2"
+                    />
+                    <select
+                      value={formData.productServiceName}
+                      onChange={(e)=> setFormData({ ...formData, productServiceName: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                      required
+                    >
+                      <option value="">Select product</option>
+                      {products.map(p => (
+                        <option key={p._id} value={p.name}>{p.name} — {p.basePrice}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    value={formData.productServiceName}
+                    onChange={(e) => setFormData({ ...formData, productServiceName: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                    required
+                  />
+                )}
               </div>
 
               <div>
@@ -509,15 +558,17 @@ export default function OrdersPage() {
                 />
               </div>
 
-              <div className="col-span-2">
+              <div className="col-span-2 flex justify-end gap-2 mt-2">
+                <button type="button" onClick={()=>setShowForm(false)} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">Cancel</button>
                 <button
                   type="submit"
-                  className="w-full px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+                  className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
                 >
                   {editingOrder ? 'Update Order' : 'Create Order'}
                 </button>
               </div>
-            </form>
+              </form>
+            </div>
           </div>
         )}
 
@@ -596,6 +647,7 @@ export default function OrdersPage() {
             <button disabled={page===1} onClick={()=>setPage(p=>Math.max(1,p-1))} className="px-3 py-1 rounded-md bg-gray-100 disabled:opacity-50">Prev</button>
             <button disabled={page*pageSize>=orders.length} onClick={()=>setPage(p=>p+1)} className="px-3 py-1 rounded-md bg-gray-100 disabled:opacity-50">Next</button>
           </div>
+        </div>
         </div>
       </div>
       {showDeleteModal && (

@@ -25,7 +25,16 @@ if (typeof window !== 'undefined') {
       const status = error?.response?.status;
       const msg = error?.response?.data?.message || error?.message || 'Request failed';
       const path = error?.config?.url || '';
-       toast.error(`${msg}${path ? `\n${path}` : ''}`);
+      try {
+        const tokenPresent = !!localStorage.getItem('token');
+        const isLoginPath = typeof window !== 'undefined' && window.location?.pathname === '/login';
+        // Suppress noisy 401 toasts after logout/inactivity redirect (no token) or on login page
+        if (!(status === 401 && !tokenPresent) && !isLoginPath) {
+          toast.error(`${msg}${path ? `\n${path}` : ''}`);
+        }
+      } catch {
+        // ignore toast errors
+      }
       return Promise.reject(error);
     }
   );

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import api from '@/lib/api';
+import Sidebar from '@/components/Sidebar';
 import { toast } from '@/store/toastStore';
 
 type AuditLog = {
@@ -145,20 +146,17 @@ export default function LogsPage() {
   })), [logs]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-800">Activity Logs</h1>
-            <div className="flex gap-2">
-              <button onClick={()=>router.push('/dashboard')} className="px-4 py-2 bg-gray-600 text-white rounded-md">Dashboard</button>
-              <button onClick={()=>router.push('/orders')} className="px-4 py-2 bg-indigo-600 text-white rounded-md">Orders</button>
-            </div>
+    <div className="min-h-screen bg-gray-50 flex">
+      <Sidebar isAdmin={user?.role==='Admin'} />
+      <div className="flex-1">
+        <nav className="bg-white border-b sticky top-0 z-50">
+          <div className="px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
+            <div className="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold">PS</div>
+            <button onClick={()=>router.push('/orders')} className="px-3 py-1.5 bg-indigo-600 text-white rounded-md">Orders</button>
           </div>
-        </div>
-      </nav>
+        </nav>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="px-4 sm:px-6 lg:px-8 py-8">
         {/* Filters */}
         <div className="bg-gradient-to-br from-white to-gray-50 rounded-xl shadow-lg border border-gray-200 p-6 mb-6">
           <div className="grid grid-cols-1 md:grid-cols-6 gap-4 md:items-end">
@@ -311,6 +309,7 @@ export default function LogsPage() {
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   );

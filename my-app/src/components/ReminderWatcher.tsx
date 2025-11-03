@@ -18,6 +18,8 @@ export default function ReminderWatcher() {
 
     const poll = async () => {
       try {
+        // Skip when not authenticated to avoid toasts after logout
+        if (!localStorage.getItem('token')) return;
         const { data } = await api.get('/orders');
         const now = Date.now();
         const pending = (data || []).filter((o: any) => o.paymentStatus !== 'Paid');
