@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Order = require('../models/Order');
+const Customer = require('../models/Customer');
 const auth = require('../middleware/auth');
 const audit = require('../middleware/audit');
 
@@ -30,6 +31,31 @@ router.post('/', auth, audit('CREATE', 'Order'), async (req, res) => {
     const base = { ...req.body };
     if (!base.orderId) base.orderId = await generateUniqueOrderId();
     const { finalAmount, profit, partialRemainingAmount } = computeDerived(base);
+    // If phone provided, find or create customer and attach reference
+    if (base.customerPhone) {
+      try {
+        let cust = await Customer.findOne({ phone: base.customerPhone });
+        if (!cust) {
+          cust = await Customer.create({
+            name: base.customerSupplierName || base.clientName || 'Unknown',
+            phone: base.customerPhone,
+            address: base.customerAddress || ''
+          });
+        } else {
+          // update address/name if missing
+          const shouldUpdate = (!cust.address && base.customerAddress) || (!cust.name && base.customerSupplierName);
+          if (shouldUpdate) {
+            cust.name = cust.name || base.customerSupplierName || base.clientName || cust.name;
+            cust.address = cust.address || base.customerAddress || cust.address;
+            await cust.save();
+          }
+        }
+        if (cust) base.customerId = cust._id;
+      } catch (e) {
+        console.error('Customer lookup/create failed:', e);
+      }
+    }
+
     const order = new Order({
       ...base,
       userId: req.user._id,
@@ -38,7 +64,21 @@ router.post('/', auth, audit('CREATE', 'Order'), async (req, res) => {
       partialRemainingAmount,
     });
     await order.save();
-    res.json(order);
+
+    // Return the created order populated with customer when possible
+    let out = await Order.findById(order._id).populate('customerId').lean();
+    if (out) {
+      if (out.customerId) {
+        out.customer = out.customerId;
+        delete out.customerId;
+      } else if (out.customerPhone) {
+        try {
+          const cust = await Customer.findOne({ phone: out.customerPhone }).lean();
+          if (cust) out.customer = cust;
+        } catch (e) {}
+      }
+    }
+    res.json(out);
   } catch (error) {
     console.error('Create order error:', error);
     res.status(500).json({ message: error.message });
@@ -63,7 +103,22 @@ router.get('/', auth, async (req, res) => {
       if (minRemaining) query.partialRemainingAmount.$gte = Number(minRemaining);
       if (maxRemaining) query.partialRemainingAmount.$lte = Number(maxRemaining);
     }
-    const orders = await Order.find(query).sort({ createdAt: -1 });
+    // populate customerId when present, otherwise fallback to phone lookup for legacy orders
+    let orders = await Order.find(query).sort({ createdAt: -1 }).populate('customerId').lean();
+    orders = await Promise.all(orders.map(async (o) => {
+      if (o.customerId) {
+        o.customer = o.customerId;
+        delete o.customerId;
+        return o;
+      }
+      if (o.customerPhone) {
+        try {
+          const cust = await Customer.findOne({ phone: o.customerPhone }).lean();
+          if (cust) o.customer = cust;
+        } catch (e) {}
+      }
+      return o;
+    }));
     res.json(orders);
   } catch (error) {
     console.error('Get orders error:', error);
@@ -74,8 +129,17 @@ router.get('/', auth, async (req, res) => {
 // Get single order
 router.get('/:id', auth, async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id);
+    let order = await Order.findById(req.params.id).populate('customerId').lean();
     if (!order) return res.status(404).json({ message: 'Order not found' });
+    if (order.customerId) {
+      order.customer = order.customerId;
+      delete order.customerId;
+    } else if (order.customerPhone) {
+      try {
+        const cust = await Customer.findOne({ phone: order.customerPhone }).lean();
+        if (cust) order.customer = cust;
+      } catch (e) {}
+    }
     res.json(order);
   } catch (error) {
     console.error('Get order error:', error);
@@ -90,12 +154,45 @@ router.put('/:id', auth, audit('UPDATE', 'Order'), async (req, res) => {
     res.locals.entityBefore = await Order.findById(req.params.id).lean();
     const base = { ...req.body };
     const { finalAmount, profit, partialRemainingAmount } = computeDerived(base);
-    const order = await Order.findByIdAndUpdate(
+    // If phone provided, find or create customer and attach reference
+    if (base.customerPhone) {
+      try {
+        let cust = await Customer.findOne({ phone: base.customerPhone });
+        if (!cust) {
+          cust = await Customer.create({
+            name: base.customerSupplierName || base.clientName || 'Unknown',
+            phone: base.customerPhone,
+            address: base.customerAddress || ''
+          });
+        } else {
+          const shouldUpdate = (!cust.address && base.customerAddress) || (!cust.name && base.customerSupplierName);
+          if (shouldUpdate) {
+            cust.name = cust.name || base.customerSupplierName || base.clientName || cust.name;
+            cust.address = cust.address || base.customerAddress || cust.address;
+            await cust.save();
+          }
+        }
+        if (cust) base.customerId = cust._id;
+      } catch (e) {
+        console.error('Customer lookup/create failed:', e);
+      }
+    }
+
+    let order = await Order.findByIdAndUpdate(
       req.params.id,
       { ...base, finalAmount, profit, partialRemainingAmount },
       { new: true }
-    );
+    ).populate('customerId').lean();
     if (!order) return res.status(404).json({ message: 'Order not found' });
+    if (order.customerId) {
+      order.customer = order.customerId;
+      delete order.customerId;
+    } else if (order.customerPhone) {
+      try {
+        const cust = await Customer.findOne({ phone: order.customerPhone }).lean();
+        if (cust) order.customer = cust;
+      } catch (e) {}
+    }
     res.json(order);
   } catch (error) {
     console.error('Update order error:', error);

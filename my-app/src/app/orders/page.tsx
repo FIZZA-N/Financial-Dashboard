@@ -18,6 +18,17 @@ type BusinessType = 'Travel' | 'Dates' | 'Belts';
   businessType: BusinessType;
   orderId: string;
   orderType: 'Retail' | 'Shopify' | 'Preorder' | 'Wholesale' | 'Service';
+  // For multi-product support (preferred)
+  products?: Array<{
+    productId: string;
+    name: string;
+    quantity: number;
+    basePrice: number;
+    baseCost?: number;
+    sellingPrice: number;
+    costPrice: number;
+  }>;
+  // Backwards-compatible single-product fields
   productServiceName: string;
   quantity: number;
   costPrice: number;
@@ -27,6 +38,10 @@ type BusinessType = 'Travel' | 'Dates' | 'Belts';
   partialRemainingAmount: number;
   paymentStatus: 'Paid' | 'Unpaid' | 'Partial';
   paymentMethod: 'Cash' | 'Bank' | 'JazzCash' | 'Online';
+  // Client info (phone lookup will populate name/address)
+  clientPhone?: string;
+  clientName?: string;
+  clientAddress?: string;
   customerSupplierName: string;
   remarks: string;
 };
@@ -52,6 +67,7 @@ export default function OrdersPage() {
     orderId: '',
     orderType: 'Retail',
     productServiceName: '',
+    products: [],
     quantity: 0,
     costPrice: 0,
     sellingPrice: 0,
@@ -60,6 +76,9 @@ export default function OrdersPage() {
     partialRemainingAmount: 0,
     paymentStatus: 'Unpaid',
     paymentMethod: 'Cash',
+    clientPhone: '',
+    clientName: '',
+    clientAddress: '',
     customerSupplierName: '',
     remarks: ''
   });
@@ -140,10 +159,70 @@ export default function OrdersPage() {
     e.preventDefault();
     
     try {
+      // Prepare payload: prefer products array if present
+      const payload: any = { ...formData };
+      if (formData.products && formData.products.length > 0) {
+        // Ensure numeric values and remove client transient fields
+        payload.products = formData.products.map(p => ({
+          productId: p.productId,
+          name: p.name,
+          quantity: Number(p.quantity),
+          basePrice: Number(p.basePrice),
+          baseCost: Number(p.baseCost || 0),
+          sellingPrice: Number(p.sellingPrice),
+          costPrice: Number(p.costPrice)
+        }));
+        // keep sellingPrice/costPrice totals for backwards compatibility
+        payload.sellingPrice = Number(formData.sellingPrice || 0);
+        payload.costPrice = Number(formData.costPrice || 0);
+        // Provide a human-friendly productServiceName for legacy fields and validations
+        payload.productServiceName = formData.products.map(p => p.name).join(', ');
+      }
+      // Ensure customerSupplierName is present (backend requires it)
+      if (!payload.customerSupplierName) payload.customerSupplierName = formData.clientName || formData.customerSupplierName || '';
+
+      // If clientPhone provided, ensure a Customer exists: lookup by phone, create if missing
+      if (formData.clientPhone) {
+        try {
+          const { data: existing } = await api.get('/customers', { params: { phone: formData.clientPhone } });
+          if (existing && existing.name) {
+            payload.customerSupplierName = existing.name;
+          }
+        } catch (e) {
+          // Not found -> create customer record before creating order
+          try {
+            const createPayload = {
+              name: formData.clientName || payload.customerSupplierName || 'Unknown',
+              phone: formData.clientPhone,
+              address: formData.clientAddress || ''
+            };
+            const { data: created } = await api.post('/customers', createPayload);
+            if (created && created.name) payload.customerSupplierName = created.name;
+          } catch (ce) {
+            // swallow customer create errors but continue to create order (backend will still validate required fields)
+            console.error('Customer create failed', ce);
+          }
+        }
+      }
+
+        // persist customer contact fields on the order so slips can use them
+        if (formData.clientPhone) payload.customerPhone = formData.clientPhone;
+        if (formData.clientAddress) payload.customerAddress = formData.clientAddress;
+
+      // If products array present, ensure totals and total quantity are computed now (avoid stale state)
+      if (payload.products && payload.products.length > 0) {
+        const totalSelling = payload.products.reduce((s: number, p: any) => s + (Number(p.sellingPrice || p.basePrice || 0) * Number(p.quantity || 0)), 0);
+        const totalCost = payload.products.reduce((s: number, p: any) => s + (Number(p.costPrice || p.baseCost || 0) * Number(p.quantity || 0)), 0);
+        const totalQty = payload.products.reduce((s: number, p: any) => s + Number(p.quantity || 0), 0);
+        payload.sellingPrice = Math.round(totalSelling * 100) / 100;
+        payload.costPrice = Math.round(totalCost * 100) / 100;
+        payload.quantity = totalQty;
+      }
+
       if (editingOrder) {
-        await updateOrder(editingOrder._id, formData);
+        await updateOrder(editingOrder._id, payload);
       } else {
-        await createOrder(formData);
+        await createOrder(payload);
       }
       
       setShowForm(false);
@@ -153,6 +232,7 @@ export default function OrdersPage() {
         orderId: '',
         orderType: 'Retail',
         productServiceName: '',
+        products: [],
         quantity: 0,
         costPrice: 0,
         sellingPrice: 0,
@@ -161,6 +241,9 @@ export default function OrdersPage() {
         partialRemainingAmount: 0,
         paymentStatus: 'Unpaid',
         paymentMethod: 'Cash',
+        clientPhone: '',
+        clientName: '',
+        clientAddress: '',
         customerSupplierName: '',
         remarks: ''
       });
@@ -175,15 +258,27 @@ export default function OrdersPage() {
       businessType: order.businessType,
       orderId: order.orderId,
       orderType: order.orderType,
-      productServiceName: order.productServiceName,
-      quantity: order.quantity,
-      costPrice: order.costPrice,
-      sellingPrice: order.sellingPrice,
+      productServiceName: order.productServiceName || '',
+      products: (order as any).products && (order as any).products.length > 0 ? (order as any).products.map((p: any) => ({
+        productId: p.productId || p._id || '',
+        name: p.name,
+        quantity: p.quantity,
+        basePrice: p.basePrice,
+        baseCost: p.baseCost || 0,
+        sellingPrice: p.sellingPrice,
+        costPrice: p.costPrice
+      })) : [],
+      quantity: order.quantity || 0,
+      costPrice: order.costPrice || 0,
+      sellingPrice: order.sellingPrice || 0,
       taxPercent: (order as any).taxPercent || 0,
       partialPaidAmount: (order as any).partialPaidAmount || 0,
       partialRemainingAmount: (order as any).partialRemainingAmount || 0,
       paymentStatus: order.paymentStatus,
       paymentMethod: order.paymentMethod,
+      clientPhone: (order as any).clientPhone || '',
+      clientName: order.customerSupplierName || '',
+      clientAddress: (order as any).clientAddress || '',
       customerSupplierName: order.customerSupplierName,
       remarks: order.remarks
     });
@@ -212,6 +307,7 @@ export default function OrdersPage() {
       orderId: '',
       orderType: 'Retail',
       productServiceName: '',
+      products: [],
       quantity: 0,
       costPrice: 0,
       sellingPrice: 0,
@@ -220,6 +316,9 @@ export default function OrdersPage() {
       partialRemainingAmount: 0,
       paymentStatus: 'Unpaid',
       paymentMethod: 'Cash',
+      clientPhone: '',
+      clientName: '',
+      clientAddress: '',
       customerSupplierName: '',
       remarks: ''
     });

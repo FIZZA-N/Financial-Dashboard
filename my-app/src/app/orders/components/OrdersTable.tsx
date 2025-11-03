@@ -77,7 +77,18 @@ export default function OrdersTable({
                   </button>
                 )}
                 <button
-                  onClick={async () => generateOrderSlip(order)}
+                  onClick={async () => {
+                    // Debug: log order object to help trace missing customer fields in slip
+                    try {
+                      console.log('generateOrderSlip - order object:', order);
+                      if (!(order as any).customerPhone && !(order as any).clientPhone && !(order as any).customerAddress) {
+                        console.warn('Order appears to be missing customerPhone/customerAddress in the object passed to PDF generator');
+                      }
+                    } catch (e) {
+                      console.error('Error logging order for slip debug', e);
+                    }
+                    await generateOrderSlip(order);
+                  }}
                   className="text-emerald-600 hover:text-emerald-800"
                 >
                   Slip

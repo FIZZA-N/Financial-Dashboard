@@ -1,5 +1,15 @@
 const mongoose = require('mongoose');
 
+const ProductItemSchema = new mongoose.Schema({
+  productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
+  name: { type: String, required: true },
+  quantity: { type: Number, required: true, min: 0 },
+  basePrice: { type: Number, required: true, min: 0 },
+  baseCost: { type: Number, default: 0, min: 0 },
+  sellingPrice: { type: Number, required: true, min: 0 },
+  costPrice: { type: Number, required: true, min: 0 }
+}, { _id: false });
+
 const OrderSchema = new mongoose.Schema({
   businessType: {
     type: String,
@@ -16,40 +26,24 @@ const OrderSchema = new mongoose.Schema({
     required: true,
     enum: ['Retail', 'Shopify', 'Preorder', 'Wholesale', 'Service']
   },
-  productServiceName: {
-    type: String,
-    required: true
+  // New multi-product support
+  products: {
+    type: [ProductItemSchema],
+    default: []
   },
-  quantity: {
-    type: Number,
-    required: true,
-    min: 0
-  },
-  costPrice: {
-    type: Number,
-    required: true,
-    min: 0
-  },
-  sellingPrice: {
-    type: Number,
-    required: true,
-    min: 0
-  },
-  // Optional tax percent applied on selling price to compute finalAmount
+  // Backward compatibility for single-product
+  productServiceName: String,
+  quantity: Number,
+  costPrice: Number,
+  sellingPrice: Number,
+
   taxPercent: {
     type: Number,
     default: 0,
     min: 0,
     max: 100
   },
-  // Final amount customer owes (sellingPrice + tax)
-  finalAmount: {
-    type: Number,
-    default: function() {
-      const tax = (this.taxPercent || 0) / 100;
-      return Math.round((this.sellingPrice * (1 + tax)) * 100) / 100;
-    }
-  },
+  finalAmount: { type: Number, default: 0 },
   paymentStatus: {
     type: String,
     required: true,
@@ -65,44 +59,51 @@ const OrderSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  remarks: {
-    type: String,
-    default: ''
-  },
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  // Profit calculated from finalAmount (includes tax) minus cost
-  profit: {
-    type: Number,
-    default: function() {
-      const tax = (this.taxPercent || 0) / 100;
-      const finalAmount = Math.round((this.sellingPrice * (1 + tax)) * 100) / 100;
-      return finalAmount - this.costPrice;
-    }
-  },
-  // Partial payment tracking (used when paymentStatus === 'Partial')
-  partialPaidAmount: {
-    type: Number,
-    default: 0,
-    min: 0
-  },
-  partialRemainingAmount: {
-    type: Number,
-    default: function() {
-      if (this.paymentStatus !== 'Partial') return 0;
-      const tax = (this.taxPercent || 0) / 100;
-      const finalAmount = Math.round((this.sellingPrice * (1 + tax)) * 100) / 100;
-      const paid = this.partialPaidAmount || 0;
-      const remaining = Math.max(0, finalAmount - paid);
-      return Math.round(remaining * 100) / 100;
-    }
-  }
+  // Reference to Customer for easy population
+  customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },
+  // Optional customer contact details (saved from order form)
+  customerPhone: { type: String },
+  customerAddress: { type: String },
+  remarks: { type: String, default: '' },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  profit: { type: Number, default: 0 },
+  partialPaidAmount: { type: Number, default: 0, min: 0 },
+  partialRemainingAmount: { type: Number, default: 0 }
 }, {
   timestamps: true
 });
 
-module.exports = mongoose.model('Order', OrderSchema);
+// Pre-save hook to calculate totals
+OrderSchema.pre('save', function(next) {
+  const order = this;
 
+  let totalSelling = 0;
+  let totalCost = 0;
+
+  if (order.products.length > 0) {
+    // Multi-product calculation
+    order.products.forEach(p => {
+      totalSelling += (p.sellingPrice || p.basePrice) * (p.quantity || 0);
+      totalCost += (p.costPrice || p.baseCost) * (p.quantity || 0);
+    });
+  } else if (order.sellingPrice && order.quantity) {
+    // Single product fallback
+    totalSelling = order.sellingPrice * order.quantity;
+    totalCost = order.costPrice || 0;
+  }
+
+  const taxMultiplier = 1 + ((order.taxPercent || 0) / 100);
+  order.finalAmount = Math.round(totalSelling * taxMultiplier * 100) / 100;
+  order.profit = Math.round((totalSelling * taxMultiplier - totalCost) * 100) / 100;
+
+  if (order.paymentStatus === 'Partial') {
+    const remaining = Math.max(0, order.finalAmount - (order.partialPaidAmount || 0));
+    order.partialRemainingAmount = Math.round(remaining * 100) / 100;
+  } else {
+    order.partialRemainingAmount = 0;
+  }
+
+  next();
+});
+
+module.exports = mongoose.model('Order', OrderSchema);

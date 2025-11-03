@@ -84,13 +84,15 @@ const logoBase64 = await convertImageToBase64('/logo.png');
   // Customer Information
   doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Name: ${order.customerSupplierName}`, leftMargin, yPosition);
+  const custName = (order as any).customerSupplierName || (order as any).clientName || (order as any).customerName || ((order as any).customer && (order as any).customer.name) || '';
+  doc.text(`Name: ${custName}`, leftMargin, yPosition);
   yPosition += 4;
   
-  doc.text(`Ph: ${order.customerPhone || '0340-XXXXXXX'}`, leftMargin, yPosition);
+  const custPhone = (order as any).customerPhone || (order as any).clientPhone || (order as any).customerPhone || ((order as any).customer && (order as any).customer.phone) || '0340-XXXXXXX';
+  doc.text(`Ph: ${custPhone}`, leftMargin, yPosition);
   yPosition += 4;
   
-  const address = order.customerAddress || 'Karachi, Pakistan';
+  const address = (order as any).customerAddress || (order as any).clientAddress || ((order as any).customer && (order as any).customer.address) || 'Karachi, Pakistan';
   const addressLines = doc.splitTextToSize(`Address: ${address}`, contentWidth);
   doc.text(addressLines, leftMargin, yPosition);
   yPosition += (addressLines.length * 4);
@@ -124,16 +126,41 @@ const logoBase64 = await convertImageToBase64('/logo.png');
 
   // Item Details
   doc.setFont('helvetica', 'normal');
-  
-  const productNameLines = doc.splitTextToSize(order.productServiceName, 25);
-  doc.text(productNameLines, leftMargin, yPosition);
-  
-  doc.text(`Rs ${order.sellingPrice.toFixed(2)}`, 30, yPosition);
-  doc.text(order.quantity.toString(), 45, yPosition);
-  doc.text('0', 55, yPosition);
-  doc.text(`Rs ${(order.sellingPrice * order.quantity).toFixed(2)}`, 65, yPosition);
-  
-  yPosition += (productNameLines.length * 4) + 4;
+  let totalSelling = 0;
+  let totalCost = 0;
+  let totalQty = 0;
+
+  if ((order as any).products && Array.isArray((order as any).products) && (order as any).products.length > 0) {
+    // render each product line
+    (order as any).products.forEach((p: any) => {
+      const nameLines = doc.splitTextToSize(p.name || p.productServiceName || '', 25);
+      doc.text(nameLines, leftMargin, yPosition);
+      doc.text(`Rs ${Number(p.sellingPrice || p.basePrice || 0).toFixed(2)}`, 30, yPosition);
+      doc.text(String(p.quantity || 0), 45, yPosition);
+      doc.text('0', 55, yPosition);
+      const lineAmount = Number(p.sellingPrice || p.basePrice || 0) * Number(p.quantity || 0);
+      doc.text(`Rs ${lineAmount.toFixed(2)}`, 65, yPosition);
+      yPosition += (nameLines.length * 4) + 2;
+      totalSelling += lineAmount;
+      totalQty += Number(p.quantity || 0);
+      totalCost += Number(p.costPrice || p.baseCost || 0) * Number(p.quantity || 0);
+    });
+  } else {
+    // single-product fallback
+    const name = order.productServiceName || (order as any).name || '';
+    const productNameLines = doc.splitTextToSize(name, 25);
+    doc.text(productNameLines, leftMargin, yPosition);
+    const sp = Number(order.sellingPrice || 0);
+    const qty = Number(order.quantity || 0);
+    doc.text(`Rs ${sp.toFixed(2)}`, 30, yPosition);
+    doc.text(String(qty), 45, yPosition);
+    doc.text('0', 55, yPosition);
+    doc.text(`Rs ${(sp * qty).toFixed(2)}`, 65, yPosition);
+    yPosition += (productNameLines.length * 4) + 4;
+    totalSelling = sp * qty;
+    totalQty = qty;
+    totalCost = Number(order.costPrice || 0) * qty;
+  }
   
   doc.line(leftMargin, yPosition, pageWidth - rightMargin, yPosition);
   yPosition += 4;
@@ -142,10 +169,10 @@ const logoBase64 = await convertImageToBase64('/logo.png');
   doc.setFont('helvetica', 'bold');
   
   const totals = [
-    { label: 'Total Bill:', value: (order.sellingPrice * order.quantity).toFixed(2) },
+    { label: 'Total Bill:', value: totalSelling.toFixed(2) },
     { label: 'Item Discount:', value: '0' },
     { label: 'Total Discount(Rs):', value: '0' },
-    { label: 'Grand Total:', value: (order.sellingPrice * order.quantity).toFixed(2) },
+    { label: 'Grand Total:', value: totalSelling.toFixed(2) },
   ];
 
   totals.forEach(item => {
@@ -158,14 +185,14 @@ const logoBase64 = await convertImageToBase64('/logo.png');
 
   // Payment Details
   let amountPaid = 0;
-  let balance = order.sellingPrice * order.quantity;
+  let balance = totalSelling;
   
   if (order.paymentStatus === 'Paid') {
-    amountPaid = order.sellingPrice * order.quantity;
+    amountPaid = totalSelling;
     balance = 0;
   } else if (order.paymentStatus === 'Partial') {
     amountPaid = (order as any).partialPaidAmount || 0;
-    balance = (order as any).partialRemainingAmount || (order.sellingPrice * order.quantity - amountPaid);
+    balance = (order as any).partialRemainingAmount || (totalSelling - amountPaid);
   }
 
   doc.text('Amount Paid:', leftMargin, yPosition);
