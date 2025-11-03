@@ -8,6 +8,7 @@ import api from '@/lib/api';
 import { generateBusinessReport } from '@/lib/pdf';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from 'recharts';
 import { BellIcon } from '@heroicons/react/24/outline';
+import Sidebar from '@/components/Sidebar';
 
 interface Summary {
   summary: {
@@ -279,38 +280,19 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    
+    <div className="min-h-screen bg-gray-50 flex w-full max-w-full">
       {/* Navbar */}
-      <nav className="bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 border-b sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+       <Sidebar isAdmin={user?.role==='Admin'} />
+       <div className='flex-1 flex flex-col' >
+      <nav className="bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 border-b sticky top-0 z-50 !w-[100%]">
+        <div className="w-full px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 min-w-0">
               <div className="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold">PS</div>
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-800">Pak Soorty Business Dashboard</h1>
+              <h1 className="text-lg sm:text-xl font-bold text-gray-800 truncate">Pak Soorty Business Dashboard</h1>
             </div>
-            <div className="flex items-center gap-2 sm:gap-4">
-              <button
-                onClick={() => router.push('/orders')}
-                className="hidden sm:inline-flex px-3 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
-                title="Manage Orders"
-              >
-                Orders
-              </button>
-              {user?.role === 'Admin' && (
-                <button onClick={() => { localStorage.setItem('logs_last_seen', String(Date.now())); setLogsCount(0); router.push('/logs'); }} title="Activity Logs" className="relative inline-flex items-center justify-center h-9 w-9 rounded-md bg-gray-100 hover:bg-gray-200">
-                  <BellIcon className="h-5 w-5 text-gray-700" />
-                  {logsCount > 0 && (
-                    <span className="absolute -top-1 -right-1 text-xs bg-red-600 text-white rounded-full px-1.5 py-0.5">{logsCount}</span>
-                  )}
-                </button>
-              )}
-              <button
-                onClick={() => router.push('/reminders')}
-                className="hidden sm:inline-flex px-3 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700"
-                title="Payment Reminders"
-              >
-                Reminders
-              </button>
+            <div className="flex items-center gap-2 sm:gap-4">           
               <div className="hidden sm:flex items-center gap-2 text-sm text-gray-700">
                 <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center font-semibold">
                   {user?.name?.[0]}
@@ -769,6 +751,7 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

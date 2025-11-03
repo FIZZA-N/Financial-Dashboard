@@ -4,7 +4,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from '@/store/toastStore';
 
-const INACTIVITY_MS = 60_000; // 1 minute
+const INACTIVITY_MS = 60_00000000; // 1 minute
 
 export default function ClientSessionGuard() {
   const router = useRouter();
