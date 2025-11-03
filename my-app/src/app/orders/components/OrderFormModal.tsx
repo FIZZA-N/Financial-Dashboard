@@ -107,40 +107,72 @@ export default function OrderFormModal({
               <option value="Service">Service</option>
             </select>
           </div>
+<div>
+  <label className="block text-sm font-medium text-gray-700 mb-1">
+    Product/Service
+  </label>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Product/Service</label>
-            {formData.businessType === 'Dates' ? (
-              <div>
-                <input
-                  type="text"
-                  placeholder="Search product..."
-                  value={productQuery}
-                  onChange={(e)=>setProductQuery(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-2"
-                />
-                <select
-                  value={formData.productServiceName}
-                  onChange={(e)=> setFormData({ ...formData, productServiceName: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                  required
+  {formData.businessType === "Dates" ? (
+    <>
+      {formData.productServiceName ? (
+        <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-lg w-full">
+          <span className="text-indigo-700 font-medium">{formData.productServiceName}</span>
+          <button
+            onClick={() => setFormData({ ...formData, productServiceName: "" })}
+            className="text-indigo-500 hover:text-red-600 transition"
+          >
+            ✕
+          </button>
+        </div>
+      ) : (
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="Search product..."
+            value={productQuery}
+            onChange={(e) => setProductQuery(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition"
+          />
+
+          {productQuery && products.length > 0 && (
+            <div className="absolute left-0 right-0 bg-white border border-gray-200 rounded-xl mt-1 max-h-56 overflow-y-auto shadow-xl animate-fadeIn z-50">
+              {products.map((p) => (
+                <div
+                  key={p._id}
+                  onClick={() => {
+                    setFormData({ ...formData, productServiceName: p.name });
+                    setProductQuery("");
+                  }}
+                  className="px-4 py-3 cursor-pointer hover:bg-indigo-50 flex justify-between items-center transition"
                 >
-                  <option value="">Select product</option>
-                  {products.map(p => (
-                    <option key={p._id} value={p.name}>{p.name} — {p.basePrice}</option>
-                  ))}
-                </select>
-              </div>
-            ) : (
-              <input
-                type="text"
-                value={formData.productServiceName}
-                onChange={(e) => setFormData({ ...formData, productServiceName: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                required
-              />
-            )}
-          </div>
+                  <span className="font-medium text-gray-800">{p.name}</span>
+                  <span className="text-xs text-gray-500">Base: {p.basePrice}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {productQuery && products.length === 0 && (
+            <div className="absolute left-0 right-0 bg-white border border-gray-200 rounded-xl mt-1 px-4 py-3 shadow-md text-sm text-gray-500">
+              No products found.
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  ) : (
+    <input
+      type="text"
+      value={formData.productServiceName}
+      onChange={(e) =>
+        setFormData({ ...formData, productServiceName: e.target.value })
+      }
+      className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+      required
+    />
+  )}
+</div>
+
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
