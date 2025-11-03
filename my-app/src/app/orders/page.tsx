@@ -1,16 +1,20 @@
-'use client';
+ 'use client';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import Sidebar from '@/components/Sidebar';
-import { BellIcon } from '@heroicons/react/24/outline';
 import { useOrderStore, Order } from '@/store/orderStore';
-import { generateOrderSlip, generateOrdersReport } from '@/lib/pdf';
+import { generateOrdersReport } from '@/lib/pdf';
+import FiltersSection from './components/FiltersSection';
+import OrdersTable from "@/app/orders/components/OrdersTable";
+import OrderFormModal from './components/OrderFormModal';
+import DeleteModal from './components/DeleteModal';
+import HeaderActions from './components/HeaderActions';
 import api from '@/lib/api';
 
 type BusinessType = 'Travel' | 'Dates' | 'Belts';
-type FormData = {
+ export type FormData = {
   businessType: BusinessType;
   orderId: string;
   orderType: 'Retail' | 'Shopify' | 'Preorder' | 'Wholesale' | 'Service';
@@ -60,9 +64,12 @@ export default function OrdersPage() {
     remarks: ''
   });
 
-  // Products for Dates
-  const [products, setProducts] = useState<{ _id: string; name: string; basePrice: number; baseCost?: number }[]>([]);
-  const [productQuery, setProductQuery] = useState('');
+  // Delete-by-filter modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [delStart, setDelStart] = useState('');
+  const [delEnd, setDelEnd] = useState('');
+  const [delBusiness, setDelBusiness] = useState<'All'|'Travel'|'Dates'|'Belts'>('All');
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -71,18 +78,6 @@ export default function OrdersPage() {
       fetchOrders();
     }
   }, [isAuthenticated]);
-
-  useEffect(() => {
-    const loadProducts = async () => {
-      if (formData.businessType === 'Dates') {
-        const { data } = await api.get('/products', { params: { businessType: 'Dates', q: productQuery || undefined } });
-        setProducts(data);
-      } else {
-        setProducts([]);
-      }
-    };
-    loadProducts();
-  }, [formData.businessType, productQuery, showForm]);
 
   useEffect(() => {
     if (user?.role === 'Admin') {
@@ -107,29 +102,6 @@ export default function OrdersPage() {
     }
   }, [showForm, editingOrder]);
 
-  useEffect(() => {
-    // Recompute remaining for Partial
-    if (formData.paymentStatus === 'Partial') {
-      const tax = (formData.taxPercent || 0) / 100;
-      const finalAmount = Math.round((formData.sellingPrice * (1 + tax)) * 100) / 100;
-      const remaining = Math.max(0, finalAmount - (formData.partialPaidAmount || 0));
-      if (remaining !== formData.partialRemainingAmount) {
-        setFormData(prev => ({ ...prev, partialRemainingAmount: Math.round(remaining * 100) / 100 }));
-      }
-    }
-  }, [formData.paymentStatus, formData.taxPercent, formData.sellingPrice, formData.partialPaidAmount]);
-
-  // When product changes or quantity changes for Dates, auto-price
-  useEffect(() => {
-    if (formData.businessType === 'Dates') {
-      const selected = products.find(p => p.name === formData.productServiceName);
-      if (selected) {
-        const price = (selected.basePrice || 0) * Math.max(1, Number(formData.quantity || 0));
-        setFormData(prev => ({ ...prev, sellingPrice: price, costPrice: (selected.baseCost || 0) * Math.max(1, Number(prev.quantity || 0)) }));
-      }
-    }
-  }, [formData.productServiceName, formData.quantity, formData.businessType, products]);
-
   const applyFilters = async () => {
     const params: any = {};
     if (startDate) params.startDate = new Date(startDate).toISOString();
@@ -139,13 +111,6 @@ export default function OrdersPage() {
     await fetchOrders(params);
     setPage(1);
   };
-
-  // Delete-by-filter modal state
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [delStart, setDelStart] = useState('');
-  const [delEnd, setDelEnd] = useState('');
-  const [delBusiness, setDelBusiness] = useState<'All'|'Travel'|'Dates'|'Belts'>('All');
-  const [deleting, setDeleting] = useState(false);
 
   const clearDeleteFilters = () => {
     setDelStart('');
@@ -231,6 +196,35 @@ export default function OrdersPage() {
     }
   };
 
+  const resetFilters = () => {
+    setStartDate('');
+    setEndDate('');
+    setPaymentStatusFilter('All');
+    setBusinessTypeFilter('All');
+    fetchOrders();
+  };
+
+  const openAddOrderForm = () => {
+    setShowForm(!showForm);
+    setEditingOrder(null);
+    setFormData({
+      businessType: 'Travel',
+      orderId: '',
+      orderType: 'Retail',
+      productServiceName: '',
+      quantity: 0,
+      costPrice: 0,
+      sellingPrice: 0,
+      taxPercent: 0,
+      partialPaidAmount: 0,
+      partialRemainingAmount: 0,
+      paymentStatus: 'Unpaid',
+      paymentMethod: 'Cash',
+      customerSupplierName: '',
+      remarks: ''
+    });
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -251,444 +245,69 @@ export default function OrdersPage() {
         </nav>
 
         <div className="px-4 sm:px-6 lg:px-8 py-8">
-        {/* Filters */}
-        <div className="bg-white rounded-lg shadow p-4 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-7 gap-3 md:items-end">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Start</label>
-              <input type="datetime-local" value={startDate} onChange={(e)=>setStartDate(e.target.value)} className="w-full px-3 py-2 border rounded-md" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">End</label>
-              <input type="datetime-local" value={endDate} onChange={(e)=>setEndDate(e.target.value)} className="w-full px-3 py-2 border rounded-md" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Business</label>
-              <select value={businessTypeFilter} onChange={(e)=>setBusinessTypeFilter(e.target.value as any)} className="w-full px-3 py-2 border rounded-md">
-                <option value="All">All</option>
-                <option value="Travel">Travel</option>
-                <option value="Dates">Dates</option>
-                <option value="Belts">Belts</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Payment Status</label>
-              <select value={paymentStatusFilter} onChange={(e)=>setPaymentStatusFilter(e.target.value as any)} className="w-full px-3 py-2 border rounded-md">
-                <option value="All">All</option>
-                <option value="Paid">Paid</option>
-                <option value="Unpaid">Unpaid</option>
-                <option value="Partial">Partial</option>
-              </select>
-            </div>
-            {paymentStatusFilter === 'Partial' && (
-              <>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Min Remaining</label>
-                  <input id="minRemaining" name="minRemaining" type="number" step="0.01" className="w-full px-3 py-2 border rounded-md" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Max Remaining</label>
-                  <input id="maxRemaining" name="maxRemaining" type="number" step="0.01" className="w-full px-3 py-2 border rounded-md" />
-                </div>
-              </>
-            )}
+          <FiltersSection
+            startDate={startDate}
+            setStartDate={setStartDate}
+            endDate={endDate}
+            setEndDate={setEndDate}
+            businessTypeFilter={businessTypeFilter}
+            setBusinessTypeFilter={setBusinessTypeFilter}
+            paymentStatusFilter={paymentStatusFilter}
+            setPaymentStatusFilter={setPaymentStatusFilter}
+            applyFilters={applyFilters}
+            resetFilters={resetFilters}
+          />
+
+          <HeaderActions
+            showForm={showForm}
+            openAddOrderForm={openAddOrderForm}
+            generateOrdersReport={() => generateOrdersReport(orders, 'All Orders Report')}
+            router={router}
+            user={user}
+            setShowDeleteModal={setShowDeleteModal}
+          />
+
+          <OrderFormModal
+            showForm={showForm}
+            setShowForm={setShowForm}
+            editingOrder={editingOrder}
+            formData={formData}
+            setFormData={setFormData}
+            handleSubmit={handleSubmit}
+          />
+
+          <OrdersTable
+            orders={orders}
+            page={page}
+            pageSize={pageSize}
+            user={user}
+            handleEdit={handleEdit}
+            handleDelete={handleDelete}
+          />
+
+          <div className="flex items-center justify-between mt-4">
+            <div className="text-sm text-gray-600">Page {page} of {Math.max(1, Math.ceil(orders.length / pageSize))}</div>
             <div className="flex gap-2">
-              <button onClick={applyFilters} className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Apply</button>
-              <button onClick={()=>{setStartDate('');setEndDate('');setPaymentStatusFilter('All');setBusinessTypeFilter('All');fetchOrders();}} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200">Reset</button>
+              <button disabled={page===1} onClick={()=>setPage(p=>Math.max(1,p-1))} className="px-3 py-1 rounded-md bg-gray-100 disabled:opacity-50">Prev</button>
+              <button disabled={page*pageSize>=orders.length} onClick={()=>setPage(p=>p+1)} className="px-3 py-1 rounded-md bg-gray-100 disabled:opacity-50">Next</button>
             </div>
           </div>
-        </div>
-
-            <div className="mb-6 flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
-          <button
-            onClick={() => {
-              setShowForm(!showForm);
-              setEditingOrder(null);
-              setFormData({
-                businessType: 'Travel',
-                orderId: '',
-                orderType: 'Retail',
-                productServiceName: '',
-                quantity: 0,
-                costPrice: 0,
-                sellingPrice: 0,
-                taxPercent: 0,
-                partialPaidAmount: 0,
-                partialRemainingAmount: 0,
-                paymentStatus: 'Unpaid',
-                paymentMethod: 'Cash',
-                customerSupplierName: '',
-                remarks: ''
-              });
-            }}
-            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
-          >
-            {showForm ? 'Cancel' : '+ Add New Order'}
-          </button>
-          <div>
-                  <button
-              onClick={() => generateOrdersReport(orders, 'All Orders Report')}
-              className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition"
-            >
-              Export All (PDF)
-            </button>
-                  <button
-                    onClick={() => router.push('/products')}
-                    className="ml-2 px-6 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition"
-                  >
-                    Products
-                  </button>
-            {user?.role !== 'DataEntry' && (
-              <button
-                onClick={() => setShowDeleteModal(true)}
-                className="ml-2 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
-              >
-                Delete by Filter
-              </button>
-            )}
-          </div>
-        </div>
-
-        {showForm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold">{editingOrder ? 'Edit Order' : 'New Order'}</h2>
-                <button onClick={()=>setShowForm(false)} type="button" className="text-gray-500 hover:text-gray-800">✕</button>
-              </div>
-              <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Business Type</label>
-                <select
-                  value={formData.businessType}
-                  onChange={(e) => setFormData({ ...formData, businessType: e.target.value as any })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                  required
-                >
-                  <option value="Travel">Travel</option>
-                  <option value="Dates">Dates</option>
-                  <option value="Belts">Belts</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Order ID</label>
-                <input
-                  type="text"
-                  value={formData.orderId}
-                  onChange={(e) => setFormData({ ...formData, orderId: e.target.value })}
-                  placeholder="Auto-generated if left blank"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Order Type</label>
-                <select
-                  value={formData.orderType}
-                  onChange={(e) => setFormData({ ...formData, orderType: e.target.value as any })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                  required
-                >
-                  <option value="Retail">Retail</option>
-                  <option value="Shopify">Shopify</option>
-                  <option value="Preorder">Preorder</option>
-                  <option value="Wholesale">Wholesale</option>
-                  <option value="Service">Service</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Product/Service</label>
-                {formData.businessType === 'Dates' ? (
-                  <div>
-                    <input
-                      type="text"
-                      placeholder="Search product..."
-                      value={productQuery}
-                      onChange={(e)=>setProductQuery(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-2"
-                    />
-                    <select
-                      value={formData.productServiceName}
-                      onChange={(e)=> setFormData({ ...formData, productServiceName: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                      required
-                    >
-                      <option value="">Select product</option>
-                      {products.map(p => (
-                        <option key={p._id} value={p.name}>{p.name} — {p.basePrice}</option>
-                      ))}
-                    </select>
-                  </div>
-                ) : (
-                  <input
-                    type="text"
-                    value={formData.productServiceName}
-                    onChange={(e) => setFormData({ ...formData, productServiceName: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                    required
-                  />
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
-                <input
-                  type="number"
-                  value={formData.quantity}
-                  onChange={(e) => setFormData({ ...formData, quantity: parseFloat(e.target.value) })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                  required
-                  min="0"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Cost Price</label>
-                <input
-                  type="number"
-                  value={formData.costPrice}
-                  onChange={(e) => setFormData({ ...formData, costPrice: parseFloat(e.target.value) })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                  required
-                  min="0"
-                  step="0.01"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Selling Price</label>
-                <input
-                  type="number"
-                  value={formData.sellingPrice}
-                  onChange={(e) => setFormData({ ...formData, sellingPrice: parseFloat(e.target.value) })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                  required
-                  min="0"
-                  step="0.01"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tax (%)</label>
-                <input
-                  type="number"
-                  value={formData.taxPercent}
-                  onChange={(e) => setFormData({ ...formData, taxPercent: parseFloat(e.target.value || '0') })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                  min="0"
-                  step="0.01"
-                  placeholder="Optional"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Status</label>
-                <select
-                  value={formData.paymentStatus}
-                  onChange={(e) => setFormData({ ...formData, paymentStatus: e.target.value as any })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                  required
-                >
-                  <option value="Paid">Paid</option>
-                  <option value="Unpaid">Unpaid</option>
-                  <option value="Partial">Partial</option>
-                </select>
-              </div>
-
-              {formData.paymentStatus === 'Partial' && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Paid Amount</label>
-                    <input
-                      type="number"
-                      value={formData.partialPaidAmount}
-                      onChange={(e) => setFormData({ ...formData, partialPaidAmount: parseFloat(e.target.value || '0') })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                      min="0"
-                      step="0.01"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Remaining Amount</label>
-                    <input
-                      type="number"
-                      value={formData.partialRemainingAmount}
-                      readOnly
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50"
-                    />
-                  </div>
-                </>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
-                <select
-                  value={formData.paymentMethod}
-                  onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value as any })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                  required
-                >
-                  <option value="Cash">Cash</option>
-                  <option value="Bank">Bank</option>
-                  <option value="JazzCash">JazzCash</option>
-                  <option value="Online">Online</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Customer/Supplier Name</label>
-                <input
-                  type="text"
-                  value={formData.customerSupplierName}
-                  onChange={(e) => setFormData({ ...formData, customerSupplierName: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
-                <input
-                  type="text"
-                  value={formData.remarks}
-                  onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                />
-              </div>
-
-              <div className="col-span-2 flex justify-end gap-2 mt-2">
-                <button type="button" onClick={()=>setShowForm(false)} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">Cancel</button>
-                <button
-                  type="submit"
-                  className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
-                >
-                  {editingOrder ? 'Update Order' : 'Create Order'}
-                </button>
-              </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        <div className="bg-white rounded-lg shadow overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Business</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order ID</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Qty</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cost</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Selling</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Profit</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {orders.slice((page-1)*pageSize, page*pageSize).map((order) => (
-                <tr key={order._id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${
-                      order.businessType === 'Travel' ? 'bg-blue-100 text-blue-800' :
-                      order.businessType === 'Dates' ? 'bg-green-100 text-green-800' :
-                      'bg-purple-100 text-purple-800'
-                    }`}>
-                      {order.businessType}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{order.orderId}</td>
-                  <td className="px-6 py-4 text-sm text-gray-900">{order.productServiceName}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{order.quantity}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{order.costPrice}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{order.sellingPrice}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-blue-600">{order.profit}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${
-                      order.paymentStatus === 'Paid' ? 'bg-green-100 text-green-800' :
-                      order.paymentStatus === 'Unpaid' ? 'bg-red-100 text-red-800' :
-                      'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {order.paymentStatus}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <button
-                      onClick={() => handleEdit(order)}
-                      className="text-indigo-600 hover:text-indigo-900 mr-3"
-                    >
-                      Edit
-                    </button>
-                    {user?.role !== 'DataEntry' && (
-                      <button
-                        onClick={() => handleDelete(order._id)}
-                        className="text-red-600 hover:text-red-900 mr-3"
-                      >
-                        Delete
-                      </button>
-                    )}
-                    <button
-                      onClick={() => generateOrderSlip(order)}
-                      className="text-emerald-600 hover:text-emerald-800"
-                    >
-                      Slip
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="flex items-center justify-between mt-4">
-          <div className="text-sm text-gray-600">Page {page} of {Math.max(1, Math.ceil(orders.length / pageSize))}</div>
-          <div className="flex gap-2">
-            <button disabled={page===1} onClick={()=>setPage(p=>Math.max(1,p-1))} className="px-3 py-1 rounded-md bg-gray-100 disabled:opacity-50">Prev</button>
-            <button disabled={page*pageSize>=orders.length} onClick={()=>setPage(p=>p+1)} className="px-3 py-1 rounded-md bg-gray-100 disabled:opacity-50">Next</button>
-          </div>
-        </div>
         </div>
       </div>
-      {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
-            <h3 className="text-lg font-bold mb-4">Delete Orders by Filter</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Start</label>
-                <input type="datetime-local" value={delStart} onChange={(e)=>setDelStart(e.target.value)} className="w-full px-3 py-2 border rounded-md" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">End</label>
-                <input type="datetime-local" value={delEnd} onChange={(e)=>setDelEnd(e.target.value)} className="w-full px-3 py-2 border rounded-md" />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-medium text-gray-600 mb-1">Business</label>
-                <select value={delBusiness} onChange={(e)=>setDelBusiness(e.target.value as any)} className="w-full px-3 py-2 border rounded-md">
-                  <option value="All">All</option>
-                  <option value="Travel">Travel</option>
-                  <option value="Dates">Dates</option>
-                  <option value="Belts">Belts</option>
-                </select>
-              </div>
-            </div>
-            <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm rounded p-3 mb-4">
-              This action is permanent and cannot be undone.
-            </div>
-            <div className="flex justify-between">
-              <button onClick={clearDeleteFilters} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200">Clear</button>
-              <div className="flex gap-2">
-                <button onClick={()=>setShowDeleteModal(false)} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200">Cancel</button>
-                <button disabled={deleting} onClick={deleteByFilter} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50">
-                  {deleting ? 'Deleting...' : 'Delete'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+
+      <DeleteModal
+        showDeleteModal={showDeleteModal}
+        setShowDeleteModal={setShowDeleteModal}
+        delStart={delStart}
+        setDelStart={setDelStart}
+        delEnd={delEnd}
+        setDelEnd={setDelEnd}
+        delBusiness={delBusiness}
+        setDelBusiness={setDelBusiness}
+        deleting={deleting}
+        clearDeleteFilters={clearDeleteFilters}
+        deleteByFilter={deleteByFilter}
+      />
     </div>
   );
 }
-
