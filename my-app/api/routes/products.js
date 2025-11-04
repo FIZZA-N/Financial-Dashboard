@@ -6,8 +6,9 @@ const auth = require('../middleware/auth');
 // Create product
 router.post('/', auth, async (req, res) => {
   try {
-    const { businessType, name, basePrice, baseCost } = req.body;
-    const created = await Product.create({ businessType, name, basePrice, baseCost });
+    const { businessType, name, basePrice, baseCost, deliveryCharges } = req.body;
+    const computedBaseCost = Number(baseCost || 0) + Number(deliveryCharges || 0);
+    const created = await Product.create({ businessType, name, basePrice, baseCost: computedBaseCost, deliveryCharges: Number(deliveryCharges || 0) });
     res.json(created);
   } catch (e) {
     console.error('Create product error:', e);
@@ -33,7 +34,15 @@ router.get('/', auth, async (req, res) => {
 // Update
 router.put('/:id', auth, async (req, res) => {
   try {
-    const updated = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    // If deliveryCharges provided, compute total baseCost = provided baseCost + deliveryCharges
+    const body = { ...req.body };
+    if (body.deliveryCharges !== undefined || body.baseCost !== undefined) {
+      const baseCostVal = Number(body.baseCost || 0);
+      const deliveryVal = Number(body.deliveryCharges || 0);
+      body.baseCost = baseCostVal + deliveryVal;
+      body.deliveryCharges = deliveryVal;
+    }
+    const updated = await Product.findByIdAndUpdate(req.params.id, body, { new: true });
     if (!updated) return res.status(404).json({ message: 'Product not found' });
     res.json(updated);
   } catch (e) {
