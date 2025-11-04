@@ -19,6 +19,9 @@ export default function ProductsPage() {
   const [deliveryCharges, setDeliveryCharges] = useState<number>(0);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -28,10 +31,12 @@ export default function ProductsPage() {
     load();
   }, [isAuthenticated, businessType]);
 
-  const load = async () => {
+  const load = async (q = '') => {
     setLoading(true);
     try {
-      const { data } = await api.get('/products', { params: { businessType } });
+      const params: any = { businessType };
+      if (q) params.q = q;
+      const { data } = await api.get('/products', { params });
       setItems(data);
     } finally { setLoading(false); }
   };
@@ -46,6 +51,7 @@ export default function ProductsPage() {
         await api.post('/products', { businessType, name, basePrice, baseCost, deliveryCharges });
       }
       setName(''); setBasePrice(0); setBaseCost(0); setDeliveryCharges(0);
+      setShowModal(false);
       await load();
     } finally { setSaving(false); }
   };
@@ -60,13 +66,33 @@ export default function ProductsPage() {
     setBusinessType(p.businessType);
     setName(p.name);
     setBasePrice(p.basePrice || 0);
-    // stored baseCost already includes delivery charges per server logic; expose deliveryCharges separately when present
-  const del = (p as any).deliveryCharges || 0;
-  // stored p.baseCost already includes deliveryCharges (server stores baseCost + delivery). When editing, expose baseCost without delivery so server can recompute.
-  setBaseCost((p.baseCost || 0) - del);
-  setDeliveryCharges(del);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // stored p.baseCost already includes deliveryCharges (server stores baseCost + delivery). When editing, expose baseCost without delivery so server can recompute.
+    const del = (p as any).deliveryCharges || 0;
+    setBaseCost((p.baseCost || 0) - del);
+    setDeliveryCharges(del);
+    setShowModal(true);
   };
+
+  // Debounced search for products by name
+  useEffect(() => {
+    let id: any;
+    if (!searchTerm) {
+      // small delay to avoid double calls when clearing
+      id = setTimeout(() => { setIsSearching(false); load(); }, 150);
+      return () => clearTimeout(id);
+    }
+    setIsSearching(true);
+    id = setTimeout(async () => {
+      try {
+        await load(searchTerm);
+      } catch (e) {
+        console.error('Product search failed', e);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(id);
+  }, [searchTerm, businessType]);
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -80,37 +106,74 @@ export default function ProductsPage() {
         </nav>
 
         <div className="px-4 sm:px-6 lg:px-8 py-8">
-          <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Business</label>
-              <select value={businessType} onChange={(e)=>setBusinessType(e.target.value as any)} className="w-full px-3 py-2 border rounded-md">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <select value={businessType} onChange={(e)=>setBusinessType(e.target.value as any)} className="px-3 py-2 border rounded-md">
                 <option value="Dates">Dates</option>
                 <option value="Travel">Travel</option>
                 <option value="Belts">Belts</option>
               </select>
+              <div className="relative">
+                <input
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search products by name"
+                  className="px-3 py-2 border rounded-md w-80"
+                />
+                {isSearching && (
+                  <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                    <svg className="animate-spin h-5 w-5 text-gray-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                    </svg>
+                  </div>
+                )}
+              </div>
             </div>
+
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Product Name</label>
-              <input value={name} onChange={(e)=>setName(e.target.value)} className="w-full px-3 py-2 border rounded-md" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Base Price</label>
-              <input type="number" step="0.01" value={basePrice} onChange={(e)=>setBasePrice(parseFloat(e.target.value||'0'))} className="w-full px-3 py-2 border rounded-md" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Base Cost</label>
-              <input type="number" step="0.01" value={baseCost} onChange={(e)=>setBaseCost(parseFloat(e.target.value||'0'))} className="w-full px-3 py-2 border rounded-md" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Delivery Charges</label>
-              <input type="number" step="0.01" value={deliveryCharges} onChange={(e)=>setDeliveryCharges(parseFloat(e.target.value||'0'))} className="w-full px-3 py-2 border rounded-md" />
-            </div>
-            <div className="flex items-end">
-              <button disabled={saving} onClick={addProduct} className="w-full px-4 py-2 bg-emerald-600 text-white rounded-md disabled:opacity-50">{saving ? 'Saving...' : (editingId ? 'Update' : 'Add')}</button>
+              <button onClick={() => { setEditingId(null); setName(''); setBasePrice(0); setBaseCost(0); setDeliveryCharges(0); setShowModal(true); }} className="px-4 py-2 bg-emerald-600 text-white rounded-md">ADD PRODUCT</button>
             </div>
           </div>
-        </div>
+
+          {/* Modal for add/edit product */}
+          {showModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+              <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl p-6">
+                <h3 className="text-lg font-semibold mb-4">{editingId ? 'Edit Product' : 'Add Product'}</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Business</label>
+                    <select value={businessType} onChange={(e)=>setBusinessType(e.target.value as any)} className="w-full px-3 py-2 border rounded-md">
+                      <option value="Dates">Dates</option>
+                      <option value="Travel">Travel</option>
+                      <option value="Belts">Belts</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Product Name</label>
+                    <input value={name} onChange={(e)=>setName(e.target.value)} className="w-full px-3 py-2 border rounded-md" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Base Price</label>
+                    <input type="number" step="0.01" value={basePrice} onChange={(e)=>setBasePrice(parseFloat(e.target.value||'0'))} className="w-full px-3 py-2 border rounded-md" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Base Cost</label>
+                    <input type="number" step="0.01" value={baseCost} onChange={(e)=>setBaseCost(parseFloat(e.target.value||'0'))} className="w-full px-3 py-2 border rounded-md" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Delivery Charges</label>
+                    <input type="number" step="0.01" value={deliveryCharges} onChange={(e)=>setDeliveryCharges(parseFloat(e.target.value||'0'))} className="w-full px-3 py-2 border rounded-md" />
+                  </div>
+                </div>
+                <div className="mt-6 flex justify-end gap-3">
+                  <button onClick={() => { setShowModal(false); setEditingId(null); }} className="px-4 py-2 bg-gray-100 rounded-md">Cancel</button>
+                  <button onClick={addProduct} disabled={saving} className="px-4 py-2 bg-emerald-600 text-white rounded-md">{saving ? 'Saving...' : (editingId ? 'Update' : 'Save')}</button>
+                </div>
+              </div>
+            </div>
+          )}
 
         <div className="bg-white rounded-lg shadow overflow-x-auto">
           <table className="w-full">
