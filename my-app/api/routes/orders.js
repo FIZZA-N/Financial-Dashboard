@@ -20,35 +20,42 @@ function computeDerived(data) {
   // Handle both multi-product and legacy single-product payloads
   let totalSelling = 0;
   let totalCost = 0;
+  let totalDiscount = 0;
 
   if (Array.isArray(data.products) && data.products.length > 0) {
     data.products.forEach(p => {
       const qty = Number(p.quantity || 0);
       const sp = Number(p.sellingPrice || p.basePrice || 0);
       const cp = Number(p.costPrice || p.baseCost || 0);
+      const pd = Number(p.discount || 0);
       totalSelling += sp * qty;
       totalCost += cp * qty;
+      totalDiscount += pd;
     });
   } else {
     totalSelling = Number(data.sellingPrice || 0) * (Number(data.quantity || 1));
     totalCost = Number(data.costPrice || 0);
+    totalDiscount += Number(data.orderDiscount || 0);
   }
+
+  // include order-level discount as well
+  totalDiscount += Number(data.orderDiscount || 0);
 
   const taxMultiplier = 1 + ((data.taxPercent || 0) / 100);
   const delivery = Number(data.deliveryCharge || 0);
   const deliveryPaidByCustomer = data.deliveryPaidByCustomer !== false; // default true
 
+  // account for discounts
+  const netSelling = Math.max(0, totalSelling - totalDiscount);
+
   let finalAmount;
   let profit;
   if (deliveryPaidByCustomer) {
-    // Customer pays delivery: final amount includes delivery, but delivery is pass-through and
-    // should not be added to profit here. Profit = revenue after tax - product costs.
-    finalAmount = Math.round((totalSelling * taxMultiplier + delivery) * 100) / 100;
-    profit = Math.round((totalSelling * taxMultiplier - totalCost) * 100) / 100;
+    finalAmount = Math.round((netSelling * taxMultiplier + delivery) * 100) / 100;
+    profit = Math.round((netSelling * taxMultiplier - totalCost) * 100) / 100;
   } else {
-    // We pay delivery: customer not charged delivery, we absorb delivery cost which reduces profit.
-    finalAmount = Math.round((totalSelling * taxMultiplier) * 100) / 100;
-    profit = Math.round((totalSelling * taxMultiplier - totalCost - delivery) * 100) / 100;
+    finalAmount = Math.round((netSelling * taxMultiplier) * 100) / 100;
+    profit = Math.round((netSelling * taxMultiplier - totalCost - delivery) * 100) / 100;
   }
 
   const partialPaid = Number(data.partialPaidAmount || 0);

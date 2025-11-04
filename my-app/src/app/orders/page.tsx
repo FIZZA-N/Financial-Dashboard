@@ -27,6 +27,7 @@ type BusinessType = 'Travel' | 'Dates' | 'Belts';
     baseCost?: number;
     sellingPrice: number;
     costPrice: number;
+    discount?: number;
   }>;
   // Backwards-compatible single-product fields
   productServiceName: string;
@@ -36,6 +37,7 @@ type BusinessType = 'Travel' | 'Dates' | 'Belts';
   taxPercent: number;
   deliveryCharge?: number;
   deliveryPaidByCustomer?: boolean;
+  orderDiscount?: number;
   partialPaidAmount: number;
   partialRemainingAmount: number;
   paymentStatus: 'Paid' | 'Unpaid' | 'Partial';
@@ -88,6 +90,7 @@ export default function OrdersPage() {
     clientAddress: '',
     deliveryCharge: 0,
     deliveryPaidByCustomer: true,
+    orderDiscount: 0,
     customerSupplierName: '',
     remarks: ''
   });
@@ -212,7 +215,8 @@ export default function OrdersPage() {
           basePrice: Number(p.basePrice),
           baseCost: Number(p.baseCost || 0),
           sellingPrice: Number(p.sellingPrice),
-          costPrice: Number(p.costPrice)
+          costPrice: Number(p.costPrice),
+          discount: Number(p.discount || 0)
         }));
         // keep sellingPrice/costPrice totals for backwards compatibility
         payload.sellingPrice = Number(formData.sellingPrice || 0);
@@ -253,6 +257,8 @@ export default function OrdersPage() {
     // persist one-time delivery charge and who pays it
     if (formData.deliveryCharge) payload.deliveryCharge = Number(formData.deliveryCharge || 0);
     payload.deliveryPaidByCustomer = formData.deliveryPaidByCustomer !== undefined ? Boolean(formData.deliveryPaidByCustomer) : true;
+  // persist order-level discount
+  payload.orderDiscount = Number(formData.orderDiscount || 0);
 
       // If products array present, ensure totals and total quantity are computed now (avoid stale state)
       if (payload.products && payload.products.length > 0) {
@@ -290,6 +296,7 @@ export default function OrdersPage() {
         clientName: '',
         clientAddress: '',
         customerSupplierName: '',
+        orderDiscount: 0,
         remarks: ''
       });
     } catch (error) {
@@ -311,7 +318,8 @@ export default function OrdersPage() {
         basePrice: p.basePrice,
         baseCost: p.baseCost || 0,
         sellingPrice: p.sellingPrice,
-        costPrice: p.costPrice
+        costPrice: p.costPrice,
+        discount: p.discount || 0
       })) : [],
       quantity: order.quantity || 0,
       costPrice: order.costPrice || 0,
@@ -326,6 +334,7 @@ export default function OrdersPage() {
       clientAddress: (order as any).clientAddress || '',
       deliveryCharge: (order as any).deliveryCharge || 0,
       deliveryPaidByCustomer: (order as any).deliveryPaidByCustomer !== undefined ? Boolean((order as any).deliveryPaidByCustomer) : true,
+      orderDiscount: (order as any).orderDiscount || 0,
       customerSupplierName: order.customerSupplierName,
       remarks: order.remarks
     });

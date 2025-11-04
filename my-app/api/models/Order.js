@@ -7,7 +7,9 @@ const ProductItemSchema = new mongoose.Schema({
   basePrice: { type: Number, required: true, min: 0 },
   baseCost: { type: Number, default: 0, min: 0 },
   sellingPrice: { type: Number, required: true, min: 0 },
-  costPrice: { type: Number, required: true, min: 0 }
+  costPrice: { type: Number, required: true, min: 0 },
+  // per-line discount (absolute amount applied to this line)
+  discount: { type: Number, default: 0, min: 0 }
 }, { _id: false });
 
 const OrderSchema = new mongoose.Schema({
@@ -70,6 +72,8 @@ const OrderSchema = new mongoose.Schema({
   // Optional customer contact details (saved from order form)
   customerPhone: { type: String },
   customerAddress: { type: String },
+  // Order-level discount (absolute amount subtracted from total bill before tax)
+  orderDiscount: { type: Number, default: 0, min: 0 },
   remarks: { type: String, default: '' },
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   profit: { type: Number, default: 0 },
@@ -85,33 +89,45 @@ OrderSchema.pre('save', function(next) {
 
   let totalSelling = 0;
   let totalCost = 0;
+  let totalDiscount = 0;
 
   if (order.products && order.products.length > 0) {
     // Multi-product calculation
     order.products.forEach(p => {
-      totalSelling += (p.sellingPrice || p.basePrice || 0) * (p.quantity || 0);
-      totalCost += (p.costPrice || p.baseCost || 0) * (p.quantity || 0);
+      const qty = Number(p.quantity || 0);
+      const lineSelling = Number(p.sellingPrice || p.basePrice || 0) * qty;
+      const lineCost = Number(p.costPrice || p.baseCost || 0) * qty;
+      const lineDiscount = Number(p.discount || 0);
+      totalSelling += lineSelling;
+      totalCost += lineCost;
+      totalDiscount += lineDiscount;
     });
   } else if (order.sellingPrice && order.quantity) {
     // Single product fallback
     totalSelling = Number(order.sellingPrice || 0) * Number(order.quantity || 0);
     totalCost = Number(order.costPrice || 0);
+    totalDiscount = Number(order.orderDiscount || 0);
   }
+  // include order-level discount too
+  totalDiscount = totalDiscount + Number(order.orderDiscount || 0);
 
   // deliveryCharge applies once per order (not per product)
   const delivery = Number(order.deliveryCharge || 0);
   const deliveryPaidByCustomer = order.deliveryPaidByCustomer !== false; // default true
 
   const taxMultiplier = 1 + ((order.taxPercent || 0) / 100);
+  // net selling after discounts
+  const netSelling = Math.max(0, totalSelling - totalDiscount);
   if (deliveryPaidByCustomer) {
-    // Customer pays delivery: add delivery to customer's bill (increases finalAmount)
-    // but treat delivery as pass-through (do NOT add delivery to profit).
-    order.finalAmount = Math.round((totalSelling * taxMultiplier + delivery) * 100) / 100;
-    order.profit = Math.round((totalSelling * taxMultiplier - totalCost) * 100) / 100;
+    // Customer pays delivery: add delivery to customer's bill (finalAmount)
+    // Discount reduces taxable base (netSelling)
+    order.finalAmount = Math.round((netSelling * taxMultiplier + delivery) * 100) / 100;
+    // Profit does NOT include delivery when customer pays (delivery is pass-through)
+    order.profit = Math.round((netSelling * taxMultiplier - totalCost) * 100) / 100;
   } else {
-    // We pay delivery: do not add delivery to finalAmount, but subtract it from profit (it's our cost)
-    order.finalAmount = Math.round((totalSelling * taxMultiplier) * 100) / 100;
-    order.profit = Math.round((totalSelling * taxMultiplier - totalCost - delivery) * 100) / 100;
+    // We pay delivery: customer not charged delivery; we absorb delivery cost which reduces profit.
+    order.finalAmount = Math.round((netSelling * taxMultiplier) * 100) / 100;
+    order.profit = Math.round((netSelling * taxMultiplier - totalCost - delivery) * 100) / 100;
   }
 
   if (order.paymentStatus === 'Partial') {

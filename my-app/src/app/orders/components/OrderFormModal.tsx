@@ -68,7 +68,14 @@ export default function OrderFormModal({
     // Recompute remaining for Partial
     if (formData.paymentStatus === 'Partial') {
       const tax = (formData.taxPercent || 0) / 100;
-      let finalAmount = Math.round((Number(formData.sellingPrice || 0) * (1 + tax)) * 100) / 100;
+      // compute total discounts from products and order-level
+      const items = formData.products || [];
+      const totalLineDiscounts = items.reduce((s: number, it: any) => s + Number(it.discount || 0), 0);
+      const orderDiscount = Number(formData.orderDiscount || 0);
+      const totalDiscount = totalLineDiscounts + orderDiscount;
+      // net selling before tax
+      const netSelling = Math.max(0, Number(formData.sellingPrice || 0) - totalDiscount);
+      let finalAmount = Math.round((netSelling * (1 + tax)) * 100) / 100;
       // include delivery in finalAmount only when customer is charged
       const delivery = Number(formData.deliveryCharge || 0);
       const deliveryPaidByCustomer = formData.deliveryPaidByCustomer !== undefined ? Boolean(formData.deliveryPaidByCustomer) : true;
@@ -214,7 +221,7 @@ export default function OrderFormModal({
                       items[idx].sellingPrice = Number(items[idx].basePrice || p.basePrice) * items[idx].quantity;
                       items[idx].costPrice = Number(items[idx].baseCost || p.baseCost || 0) * items[idx].quantity;
                     } else {
-                      items.push({ productId: p._id, name: p.name, quantity: 1, basePrice: p.basePrice, baseCost: p.baseCost || 0, sellingPrice: p.basePrice, costPrice: p.baseCost || 0 });
+                      items.push({ productId: p._id, name: p.name, quantity: 1, basePrice: p.basePrice, baseCost: p.baseCost || 0, sellingPrice: p.basePrice, costPrice: p.baseCost || 0, discount: 0 });
                     }
                     return { ...prev, products: items };
                   });
@@ -245,7 +252,7 @@ export default function OrderFormModal({
                 <div className="font-medium text-sm">{it.name}</div>
                 <div className="text-xs text-gray-500">Base: {it.basePrice}</div>
               </div>
-              <div className="w-28">
+              <div className="w-20">
                 <label className="text-xs text-gray-600">Qty</label>
                 <input
                   type="number"
@@ -264,9 +271,26 @@ export default function OrderFormModal({
                   className="w-full px-2 py-1 border rounded"
                 />
               </div>
+              <div className="w-24">
+                <label className="text-xs text-gray-600">Disc</label>
+                <input
+                  type="number"
+                  value={it.discount || 0}
+                  min={0}
+                  onChange={(e) => {
+                    const val = Number(e.target.value || 0);
+                    setFormData((prev: FormData) => {
+                      const items = (prev.products || []).slice();
+                      items[idx].discount = val;
+                      return { ...prev, products: items };
+                    });
+                  }}
+                  className="w-full px-2 py-1 border rounded"
+                />
+              </div>
               <div className="w-28 text-right">
                 <div className="text-xs text-gray-600">Line</div>
-                <div className="font-medium">{Math.round((Number(it.basePrice || it.sellingPrice || 0) * Number(it.quantity || 0)) * 100) / 100}</div>
+                <div className="font-medium">{Math.round(((Number(it.basePrice || it.sellingPrice || 0) * Number(it.quantity || 0)) - Number(it.discount || 0)) * 100) / 100}</div>
               </div>
               <button type="button" onClick={() => setFormData((prev: FormData) => ({ ...prev, products: (prev.products || []).filter((_, i) => i !== idx) }))} className="px-2 py-1 text-red-600">Remove</button>
             </div>
@@ -351,6 +375,18 @@ export default function OrderFormModal({
               type="number"
               value={formData.deliveryCharge || 0}
               onChange={(e) => setFormData({ ...formData, deliveryCharge: Number(parseFloat(e.target.value || '0')) })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+              min="0"
+              step="0.01"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Order Discount (Rs)</label>
+            <input
+              type="number"
+              value={formData.orderDiscount || 0}
+              onChange={(e) => setFormData({ ...formData, orderDiscount: Number(parseFloat(e.target.value || '0')) })}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg"
               min="0"
               step="0.01"

@@ -129,6 +129,7 @@ const logoBase64 = await convertImageToBase64('/logo.png');
   let totalSelling = 0;
   let totalCost = 0;
   let totalQty = 0;
+  let totalDiscount = 0;
 
   if ((order as any).products && Array.isArray((order as any).products) && (order as any).products.length > 0) {
     // render each product line
@@ -136,14 +137,15 @@ const logoBase64 = await convertImageToBase64('/logo.png');
       const nameLines = doc.splitTextToSize(p.name || p.productServiceName || '', 25);
       doc.text(nameLines, leftMargin, yPosition);
       doc.text(`Rs ${Number(p.sellingPrice || p.basePrice || 0).toFixed(2)}`, 30, yPosition);
-      doc.text(String(p.quantity || 0), 45, yPosition);
-      doc.text('0', 55, yPosition);
+  doc.text(String(p.quantity || 0), 45, yPosition);
+  doc.text(`Rs ${Number(p.discount || 0).toFixed(2)}`, 55, yPosition);
       const lineAmount = Number(p.sellingPrice || p.basePrice || 0) * Number(p.quantity || 0);
       doc.text(`Rs ${lineAmount.toFixed(2)}`, 65, yPosition);
       yPosition += (nameLines.length * 4) + 2;
       totalSelling += lineAmount;
       totalQty += Number(p.quantity || 0);
       totalCost += Number(p.costPrice || p.baseCost || 0) * Number(p.quantity || 0);
+      totalDiscount += Number(p.discount || 0);
     });
   } else {
     // single-product fallback
@@ -153,14 +155,18 @@ const logoBase64 = await convertImageToBase64('/logo.png');
     const sp = Number(order.sellingPrice || 0);
     const qty = Number(order.quantity || 0);
     doc.text(`Rs ${sp.toFixed(2)}`, 30, yPosition);
-    doc.text(String(qty), 45, yPosition);
-    doc.text('0', 55, yPosition);
+  doc.text(String(qty), 45, yPosition);
+  doc.text(`Rs ${Number((order as any).orderDiscount || 0).toFixed(2)}`, 55, yPosition);
     doc.text(`Rs ${(sp * qty).toFixed(2)}`, 65, yPosition);
     yPosition += (productNameLines.length * 4) + 4;
     totalSelling = sp * qty;
     totalQty = qty;
     totalCost = Number(order.costPrice || 0) * qty;
+  // order-level discount will be added below
   }
+
+  // always include order-level discount
+  totalDiscount += Number((order as any).orderDiscount || 0);
   
   doc.line(leftMargin, yPosition, pageWidth - rightMargin, yPosition);
   yPosition += 4;
@@ -172,13 +178,12 @@ const logoBase64 = await convertImageToBase64('/logo.png');
   const deliveryPaidByCustomer = (order as any).deliveryPaidByCustomer !== undefined ? Boolean((order as any).deliveryPaidByCustomer) : true;
   // Use finalAmount from the order when available (backend computes it to keep consistency)
   const finalAmountFromOrder = Number((order as any).finalAmount || 0);
-  // compute displayed grand total: prefer backend finalAmount, otherwise compute locally
-  const computedGrandTotal = finalAmountFromOrder || ((totalSelling * (1 + ((order as any).taxPercent || 0)/100)) + (deliveryPaidByCustomer ? delivery : 0));
+  // compute displayed grand total: prefer backend finalAmount, otherwise compute locally (account for discounts)
+  const computedGrandTotal = finalAmountFromOrder || (((totalSelling - totalDiscount) * (1 + ((order as any).taxPercent || 0)/100)) + (deliveryPaidByCustomer ? delivery : 0));
 
   const totals = [
     { label: 'Total Bill:', value: totalSelling.toFixed(2) },
-    { label: 'Item Discount:', value: '0' },
-    { label: 'Total Discount(Rs):', value: '0' },
+    { label: 'Total Discount(Rs):', value: totalDiscount.toFixed(2) },
     // show delivery only when charged to customer
     { label: 'Delivery:', value: (deliveryPaidByCustomer ? delivery.toFixed(2) : '0.00') },
     { label: 'Grand Total:', value: computedGrandTotal.toFixed(2) },
