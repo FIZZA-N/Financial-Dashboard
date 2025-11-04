@@ -19,8 +19,13 @@ router.get('/', auth, async (req, res) => {
         { phone: { $regex: String(q), $options: 'i' } }
       ];
     }
-    const items = await Customer.find(filter).sort({ createdAt: -1 }).limit(50).lean();
-    res.json(items);
+    // support pagination for large customer lists
+    const page = Math.max(1, parseInt(req.query.page || '1'));
+    const limit = Math.min(200, parseInt(req.query.limit || '50'));
+    const skip = (page - 1) * limit;
+    const total = await Customer.countDocuments(filter);
+    const items = await Customer.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean();
+    res.json({ items, total, page, pages: Math.max(1, Math.ceil(total / limit)) });
   } catch (e) {
     console.error('Customers lookup error', e);
     res.status(500).json({ message: e.message });

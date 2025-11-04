@@ -126,7 +126,7 @@ router.post('/', auth, audit('CREATE', 'Order'), async (req, res) => {
 // Get all orders with filters
 router.get('/', auth, async (req, res) => {
   try {
-    const { businessType, paymentStatus, startDate, endDate, minRemaining, maxRemaining, orderId } = req.query;
+  const { businessType, paymentStatus, startDate, endDate, minRemaining, maxRemaining, orderId, customerId, customerPhone } = req.query;
     const query = {};
     // support searching by orderId (Bill No) - partial case-insensitive match
     if (orderId) {
@@ -140,6 +140,9 @@ router.get('/', auth, async (req, res) => {
       }
     }
     if (businessType) query.businessType = businessType;
+  // filter by customer id or phone when provided
+  if (customerId) query.customerId = customerId;
+  if (customerPhone) query.customerPhone = String(customerPhone);
     if (paymentStatus) query.paymentStatus = paymentStatus;
     if (startDate || endDate) {
       query.createdAt = {};
@@ -153,6 +156,30 @@ router.get('/', auth, async (req, res) => {
       if (maxRemaining) query.partialRemainingAmount.$lte = Number(maxRemaining);
     }
     // populate customerId when present, otherwise fallback to phone lookup for legacy orders
+    const page = req.query.page ? Math.max(1, parseInt(req.query.page)) : null;
+    const limit = req.query.limit ? Math.max(1, Math.min(500, parseInt(req.query.limit))) : null;
+
+    if (page && limit) {
+      const skip = (page - 1) * limit;
+      const total = await Order.countDocuments(query);
+      let docs = await Order.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).populate('customerId').lean();
+      docs = await Promise.all(docs.map(async (o) => {
+        if (o.customerId) {
+          o.customer = o.customerId;
+          delete o.customerId;
+          return o;
+        }
+        if (o.customerPhone) {
+          try {
+            const cust = await Customer.findOne({ phone: o.customerPhone }).lean();
+            if (cust) o.customer = cust;
+          } catch (e) {}
+        }
+        return o;
+      }));
+      return res.json({ items: docs, total, page, pages: Math.max(1, Math.ceil(total / limit)) });
+    }
+
     let orders = await Order.find(query).sort({ createdAt: -1 }).populate('customerId').lean();
     orders = await Promise.all(orders.map(async (o) => {
       if (o.customerId) {

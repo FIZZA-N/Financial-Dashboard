@@ -6,6 +6,7 @@ import {
   ClipboardList,
   Box,
   Bell,
+  Users,
   FileClock,
   Menu,
   X,
@@ -17,6 +18,7 @@ const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/orders", label: "Orders", icon: ClipboardList },
   { href: "/products", label: "Products", icon: Box },
+  { href: "/customers", label: "Customers", icon: Users },
   { href: "/reminders", label: "Reminders", icon: Bell },
   { href: "/logs", label: "Logs", icon: FileClock, adminOnly: true },
 ];
@@ -37,7 +39,7 @@ export default function Sidebar({ isAdmin }: { isAdmin?: boolean }) {
     <>
       {/* Mobile Toggle */}
       <button
-        className="md:hidden fixed top-4 left-4 z-[100] p-2 rounded-md bg-indigo-600 text-white"
+        className="md:hidden fixed top-4 left-4 z-50 p-2 rounded-md bg-indigo-600 text-white"
         onClick={() => setMobileOpen(!mobileOpen)}
       >
         {mobileOpen ? <X size={22} /> : <Menu size={22} />}
@@ -45,7 +47,7 @@ export default function Sidebar({ isAdmin }: { isAdmin?: boolean }) {
 
       {/* Sidebar */}
       <aside
-        className={`fixed md:static z-[90] h-screen bg-white border-r 
+        className={`fixed md:static z-40 h-screen bg-white border-r 
         transform transition-all duration-300 ease-in-out
         ${mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
         ${collapsed ? "md:w-16" : "md:w-64"}
@@ -98,7 +100,7 @@ export default function Sidebar({ isAdmin }: { isAdmin?: boolean }) {
       {mobileOpen && (
         <div
           onClick={() => setMobileOpen(false)}
-          className="fixed inset-0 bg-black/30 backdrop-blur-sm md:hidden z-[80]"
+          className="fixed inset-0 bg-black/30 backdrop-blur-sm md:hidden z-30"
         ></div>
       )}
     </>
