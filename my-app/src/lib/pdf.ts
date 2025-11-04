@@ -168,11 +168,20 @@ const logoBase64 = await convertImageToBase64('/logo.png');
   // Total Section
   doc.setFont('helvetica', 'bold');
   
+  const delivery = Number((order as any).deliveryCharge || 0);
+  const deliveryPaidByCustomer = (order as any).deliveryPaidByCustomer !== undefined ? Boolean((order as any).deliveryPaidByCustomer) : true;
+  // Use finalAmount from the order when available (backend computes it to keep consistency)
+  const finalAmountFromOrder = Number((order as any).finalAmount || 0);
+  // compute displayed grand total: prefer backend finalAmount, otherwise compute locally
+  const computedGrandTotal = finalAmountFromOrder || ((totalSelling * (1 + ((order as any).taxPercent || 0)/100)) + (deliveryPaidByCustomer ? delivery : 0));
+
   const totals = [
     { label: 'Total Bill:', value: totalSelling.toFixed(2) },
     { label: 'Item Discount:', value: '0' },
     { label: 'Total Discount(Rs):', value: '0' },
-    { label: 'Grand Total:', value: totalSelling.toFixed(2) },
+    // show delivery only when charged to customer
+    { label: 'Delivery:', value: (deliveryPaidByCustomer ? delivery.toFixed(2) : '0.00') },
+    { label: 'Grand Total:', value: computedGrandTotal.toFixed(2) },
   ];
 
   totals.forEach(item => {
@@ -185,14 +194,16 @@ const logoBase64 = await convertImageToBase64('/logo.png');
 
   // Payment Details
   let amountPaid = 0;
-  let balance = totalSelling;
-  
+  let balance = computedGrandTotal;
+
+  // Prefer backend-computed finalAmount and partial fields when available
+  const finalAmount = finalAmountFromOrder || computedGrandTotal;
   if (order.paymentStatus === 'Paid') {
-    amountPaid = totalSelling;
+    amountPaid = finalAmount;
     balance = 0;
   } else if (order.paymentStatus === 'Partial') {
-    amountPaid = (order as any).partialPaidAmount || 0;
-    balance = (order as any).partialRemainingAmount || (totalSelling - amountPaid);
+    amountPaid = Number((order as any).partialPaidAmount || 0);
+    balance = Number((order as any).partialRemainingAmount || Math.max(0, finalAmount - amountPaid));
   }
 
   doc.text('Amount Paid:', leftMargin, yPosition);

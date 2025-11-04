@@ -6,9 +6,9 @@ const auth = require('../middleware/auth');
 // Create product
 router.post('/', auth, async (req, res) => {
   try {
-    const { businessType, name, basePrice, baseCost, deliveryCharges } = req.body;
-    const computedBaseCost = Number(baseCost || 0) + Number(deliveryCharges || 0);
-    const created = await Product.create({ businessType, name, basePrice, baseCost: computedBaseCost, deliveryCharges: Number(deliveryCharges || 0) });
+  const { businessType, name, basePrice, baseCost, deliveryCharges } = req.body;
+  // store baseCost as provided and keep deliveryCharges separately (do NOT fold delivery into baseCost)
+  const created = await Product.create({ businessType, name, basePrice, baseCost: Number(baseCost || 0), deliveryCharges: Number(deliveryCharges || 0) });
     res.json(created);
   } catch (e) {
     console.error('Create product error:', e);
@@ -34,14 +34,10 @@ router.get('/', auth, async (req, res) => {
 // Update
 router.put('/:id', auth, async (req, res) => {
   try {
-    // If deliveryCharges provided, compute total baseCost = provided baseCost + deliveryCharges
+    // Do not fold deliveryCharges into baseCost on update; keep separate fields
     const body = { ...req.body };
-    if (body.deliveryCharges !== undefined || body.baseCost !== undefined) {
-      const baseCostVal = Number(body.baseCost || 0);
-      const deliveryVal = Number(body.deliveryCharges || 0);
-      body.baseCost = baseCostVal + deliveryVal;
-      body.deliveryCharges = deliveryVal;
-    }
+    if (body.baseCost !== undefined) body.baseCost = Number(body.baseCost || 0);
+    if (body.deliveryCharges !== undefined) body.deliveryCharges = Number(body.deliveryCharges || 0);
     const updated = await Product.findByIdAndUpdate(req.params.id, body, { new: true });
     if (!updated) return res.status(404).json({ message: 'Product not found' });
     res.json(updated);

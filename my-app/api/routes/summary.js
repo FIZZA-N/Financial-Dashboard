@@ -34,24 +34,35 @@ router.get('/monthly', auth, async (req, res) => {
     
     businessTypes.forEach(business => {
       const businessOrders = orders.filter(o => o.businessType === business);
-      
-      const sales = businessOrders.reduce((sum, o) => sum + o.sellingPrice, 0);
-      const cost = businessOrders.reduce((sum, o) => sum + o.costPrice, 0);
-      const profit = sales - cost;
+
+      // Sales should reflect the amount billed to customer (finalAmount already includes tax and delivery when charged to customer)
+      const sales = businessOrders.reduce((sum, o) => sum + Number(o.finalAmount || 0), 0);
+
+      // Cost is business cost (product cost + delivery we paid). If deliveryPaidByCustomer is false, deliveryCharge is our cost.
+      const cost = businessOrders.reduce((sum, o) => {
+        const baseCost = Number(o.costPrice || 0);
+        const deliveryCost = o.deliveryPaidByCustomer === false ? Number(o.deliveryCharge || 0) : 0;
+        return sum + baseCost + deliveryCost;
+      }, 0);
+
+      // Profit should be taken from the order.profit computed on save (already accounts for delivery rules)
+      const profit = businessOrders.reduce((sum, o) => sum + Number(o.profit || 0), 0);
+
+      // Pending payments should consider finalAmount (what customer owes)
       const pending = businessOrders
         .filter(o => o.paymentStatus !== 'Paid')
-        .reduce((sum, o) => sum + (o.paymentStatus === 'Partial' ? o.sellingPrice * 0.5 : o.sellingPrice), 0);
-      // loss based on paid amount vs cost
+        .reduce((sum, o) => sum + (o.paymentStatus === 'Partial' ? Number(o.partialRemainingAmount || 0) : Number(o.finalAmount || 0)), 0);
+
+      // loss based on paid amount vs cost (use finalAmount and partialPaidAmount)
       const loss = businessOrders.reduce((sum, o) => {
-        const tax = (o.taxPercent || 0) / 100;
-        const finalAmount = Math.round((o.sellingPrice * (1 + tax)) * 100) / 100;
-        const paidAmount = o.paymentStatus === 'Paid' ? finalAmount : (o.paymentStatus === 'Partial' ? (o.partialPaidAmount || 0) : 0);
-        const orderLoss = Math.max(0, o.costPrice - paidAmount);
+        const finalAmount = Number(o.finalAmount || 0);
+        const paidAmount = o.paymentStatus === 'Paid' ? finalAmount : (o.paymentStatus === 'Partial' ? Number(o.partialPaidAmount || 0) : 0);
+        const orderLoss = Math.max(0, (Number(o.costPrice || 0) + (o.deliveryPaidByCustomer === false ? Number(o.deliveryCharge || 0) : 0)) - paidAmount);
         return sum + orderLoss;
       }, 0);
-      
+
       summary[business] = { sales, cost, profit, pending, loss, orderCount: businessOrders.length };
-      
+
       totalSales += sales;
       totalCost += cost;
       totalProfit += profit;
@@ -93,13 +104,13 @@ router.get('/range', auth, async (req, res) => {
     });
     
     const totals = orders.reduce((acc, order) => {
-      acc.sales += order.sellingPrice;
-      acc.cost += order.costPrice;
-      acc.profit += order.profit;
+      acc.sales += Number(order.finalAmount || 0);
+      acc.cost += Number(order.costPrice || 0) + (order.deliveryPaidByCustomer === false ? Number(order.deliveryCharge || 0) : 0);
+      acc.profit += Number(order.profit || 0);
       if (order.paymentStatus !== 'Paid') {
         acc.pending += order.paymentStatus === 'Partial' 
-          ? order.sellingPrice * 0.5 
-          : order.sellingPrice;
+          ? Number(order.partialRemainingAmount || 0)
+          : Number(order.finalAmount || 0);
       }
       return acc;
     }, { sales: 0, cost: 0, profit: 0, pending: 0 });

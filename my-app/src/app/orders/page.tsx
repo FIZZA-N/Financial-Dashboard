@@ -34,6 +34,8 @@ type BusinessType = 'Travel' | 'Dates' | 'Belts';
   costPrice: number;
   sellingPrice: number;
   taxPercent: number;
+  deliveryCharge?: number;
+  deliveryPaidByCustomer?: boolean;
   partialPaidAmount: number;
   partialRemainingAmount: number;
   paymentStatus: 'Paid' | 'Unpaid' | 'Partial';
@@ -84,6 +86,8 @@ export default function OrdersPage() {
     clientPhone: '',
     clientName: '',
     clientAddress: '',
+    deliveryCharge: 0,
+    deliveryPaidByCustomer: true,
     customerSupplierName: '',
     remarks: ''
   });
@@ -246,6 +250,9 @@ export default function OrdersPage() {
         // persist customer contact fields on the order so slips can use them
         if (formData.clientPhone) payload.customerPhone = formData.clientPhone;
         if (formData.clientAddress) payload.customerAddress = formData.clientAddress;
+    // persist one-time delivery charge and who pays it
+    if (formData.deliveryCharge) payload.deliveryCharge = Number(formData.deliveryCharge || 0);
+    payload.deliveryPaidByCustomer = formData.deliveryPaidByCustomer !== undefined ? Boolean(formData.deliveryPaidByCustomer) : true;
 
       // If products array present, ensure totals and total quantity are computed now (avoid stale state)
       if (payload.products && payload.products.length > 0) {
@@ -317,6 +324,8 @@ export default function OrdersPage() {
       clientPhone: (order as any).clientPhone || '',
       clientName: order.customerSupplierName || '',
       clientAddress: (order as any).clientAddress || '',
+      deliveryCharge: (order as any).deliveryCharge || 0,
+      deliveryPaidByCustomer: (order as any).deliveryPaidByCustomer !== undefined ? Boolean((order as any).deliveryPaidByCustomer) : true,
       customerSupplierName: order.customerSupplierName,
       remarks: order.remarks
     });

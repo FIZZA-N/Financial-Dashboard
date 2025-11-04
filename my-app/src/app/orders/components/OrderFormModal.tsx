@@ -68,7 +68,11 @@ export default function OrderFormModal({
     // Recompute remaining for Partial
     if (formData.paymentStatus === 'Partial') {
       const tax = (formData.taxPercent || 0) / 100;
-      const finalAmount = Math.round((formData.sellingPrice * (1 + tax)) * 100) / 100;
+      let finalAmount = Math.round((Number(formData.sellingPrice || 0) * (1 + tax)) * 100) / 100;
+      // include delivery in finalAmount only when customer is charged
+      const delivery = Number(formData.deliveryCharge || 0);
+      const deliveryPaidByCustomer = formData.deliveryPaidByCustomer !== undefined ? Boolean(formData.deliveryPaidByCustomer) : true;
+      if (deliveryPaidByCustomer) finalAmount = Math.round((finalAmount + delivery) * 100) / 100;
       const remaining = Math.max(0, finalAmount - (formData.partialPaidAmount || 0));
       if (remaining !== formData.partialRemainingAmount) {
         setFormData((prev: FormData) => ({ ...prev, partialRemainingAmount: Math.round(remaining * 100) / 100 }));
@@ -339,6 +343,29 @@ export default function OrderFormModal({
               step="0.01"
               placeholder="Optional"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Charge</label>
+            <input
+              type="number"
+              value={formData.deliveryCharge || 0}
+              onChange={(e) => setFormData({ ...formData, deliveryCharge: Number(parseFloat(e.target.value || '0')) })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+              min="0"
+              step="0.01"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              id="deliveryPaidByCustomer"
+              type="checkbox"
+              checked={formData.deliveryPaidByCustomer !== undefined ? Boolean(formData.deliveryPaidByCustomer) : true}
+              onChange={(e) => setFormData({ ...formData, deliveryPaidByCustomer: e.target.checked })}
+              className="h-4 w-4"
+            />
+            <label htmlFor="deliveryPaidByCustomer" className="text-sm text-gray-700">Charge delivery to customer (customer pays)</label>
           </div>
 
           <div>

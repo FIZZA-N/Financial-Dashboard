@@ -43,6 +43,12 @@ const OrderSchema = new mongoose.Schema({
     min: 0,
     max: 100
   },
+  // One-time delivery charge (order-level)
+  deliveryCharge: { type: Number, default: 0, min: 0 },
+  // Whether the delivery amount is paid by the customer (true) or paid by us (false).
+  // If true: delivery is added to the customer's bill (increases finalAmount and profit).
+  // If false: delivery is borne by us and treated as additional cost (reduces profit), not added to finalAmount.
+  deliveryPaidByCustomer: { type: Boolean, default: true },
   finalAmount: { type: Number, default: 0 },
   paymentStatus: {
     type: String,
@@ -80,21 +86,33 @@ OrderSchema.pre('save', function(next) {
   let totalSelling = 0;
   let totalCost = 0;
 
-  if (order.products.length > 0) {
+  if (order.products && order.products.length > 0) {
     // Multi-product calculation
     order.products.forEach(p => {
-      totalSelling += (p.sellingPrice || p.basePrice) * (p.quantity || 0);
-      totalCost += (p.costPrice || p.baseCost) * (p.quantity || 0);
+      totalSelling += (p.sellingPrice || p.basePrice || 0) * (p.quantity || 0);
+      totalCost += (p.costPrice || p.baseCost || 0) * (p.quantity || 0);
     });
   } else if (order.sellingPrice && order.quantity) {
     // Single product fallback
-    totalSelling = order.sellingPrice * order.quantity;
-    totalCost = order.costPrice || 0;
+    totalSelling = Number(order.sellingPrice || 0) * Number(order.quantity || 0);
+    totalCost = Number(order.costPrice || 0);
   }
 
+  // deliveryCharge applies once per order (not per product)
+  const delivery = Number(order.deliveryCharge || 0);
+  const deliveryPaidByCustomer = order.deliveryPaidByCustomer !== false; // default true
+
   const taxMultiplier = 1 + ((order.taxPercent || 0) / 100);
-  order.finalAmount = Math.round(totalSelling * taxMultiplier * 100) / 100;
-  order.profit = Math.round((totalSelling * taxMultiplier - totalCost) * 100) / 100;
+  if (deliveryPaidByCustomer) {
+    // Customer pays delivery: add delivery to customer's bill (increases finalAmount)
+    // but treat delivery as pass-through (do NOT add delivery to profit).
+    order.finalAmount = Math.round((totalSelling * taxMultiplier + delivery) * 100) / 100;
+    order.profit = Math.round((totalSelling * taxMultiplier - totalCost) * 100) / 100;
+  } else {
+    // We pay delivery: do not add delivery to finalAmount, but subtract it from profit (it's our cost)
+    order.finalAmount = Math.round((totalSelling * taxMultiplier) * 100) / 100;
+    order.profit = Math.round((totalSelling * taxMultiplier - totalCost - delivery) * 100) / 100;
+  }
 
   if (order.paymentStatus === 'Partial') {
     const remaining = Math.max(0, order.finalAmount - (order.partialPaidAmount || 0));
