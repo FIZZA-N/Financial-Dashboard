@@ -110,6 +110,18 @@ export default function OrdersPage() {
     }
   }, [isAuthenticated]);
 
+  // Refresh orders when a Shopify import completes elsewhere in the app
+  useEffect(() => {
+    const handler = (e: any) => {
+      // optionally inspect e.detail for more info
+      fetchOrders();
+      // show a friendly toast
+      try { const { toast } = require('@/store/toastStore'); toast.success('Orders refreshed after Shopify import'); } catch {}
+    };
+    window.addEventListener('shopify:imported', handler as EventListener);
+    return () => window.removeEventListener('shopify:imported', handler as EventListener);
+  }, []);
+
   // Debounced suggestions for orderId (Bill No)
   useEffect(() => {
     let id: any;

@@ -75,6 +75,8 @@ const OrderSchema = new mongoose.Schema({
   // Order-level discount (absolute amount subtracted from total bill before tax)
   orderDiscount: { type: Number, default: 0, min: 0 },
   remarks: { type: String, default: '' },
+  // Store raw Shopify payload (optional)
+  rawShopify: { type: mongoose.Schema.Types.Mixed },
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   profit: { type: Number, default: 0 },
   partialPaidAmount: { type: Number, default: 0, min: 0 },

@@ -43,23 +43,23 @@ body {
    production builds or browser autoprefill states the input text color can
    end up white due to third-party CSS or UA styles. These rules are explicit
    overrides to keep behavior consistent across environments. */
-input,
+/* input,
 textarea,
 select,
 button {
   color: var(--foreground) !important;
-}
+} */
 
 /* Autofill (Chrome) and iOS text-fill color fixes */
-input:-webkit-autofill,
+/* input:-webkit-autofill,
 textarea:-webkit-autofill,
 select:-webkit-autofill {
   -webkit-text-fill-color: var(--foreground) !important;
-}
+} */
 
 /* Placeholder: use a muted version of the foreground when available */
-input::placeholder,
+/* input::placeholder,
 textarea::placeholder {
   color: rgba(0,0,0,0.45);
 }
-
+ */
