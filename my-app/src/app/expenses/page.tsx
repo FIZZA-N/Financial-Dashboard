@@ -48,13 +48,20 @@ export default function ExpensesPage() {
     }
   };
 
-  useEffect(() => { load(1); }, [businessFilter]);
+  // initial load
+  useEffect(() => { load(1); }, []);
 
   useEffect(() => {
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
     debounceRef.current = window.setTimeout(() => load(1), 300);
     return () => { if (debounceRef.current) window.clearTimeout(debounceRef.current); };
   }, [q, startDateFilter, endDateFilter, minAmount, maxAmount]);
+
+  const applyFilters = () => { load(1); };
+  const clearFilters = () => {
+    setBusinessFilter(''); setQ(''); setStartDateFilter(''); setEndDateFilter(''); setMinAmount(''); setMaxAmount('');
+    load(1);
+  };
 
   const save = async () => {
     try {
@@ -108,44 +115,83 @@ export default function ExpensesPage() {
         {/* Top controls: add form + filters */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
           <div className="bg-white p-4 rounded shadow">
-            <h3 className="font-semibold mb-2">Add Expense</h3>
-            <div className="space-y-2">
-              <label className="text-xs">Business</label>
-              <select className="block w-full px-2 py-1 border rounded" value={businessAdd} onChange={(e)=>setBusinessAdd(e.target.value as any)}>
-                <option value="Dates">Dates</option>
-                <option value="Travel">Travel</option>
-                <option value="Belts">Belts</option>
-              </select>
+            <h3 className="font-semibold mb-3">Add Expense</h3>
+            <form onSubmit={(e) => { e.preventDefault(); save(); }} className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-gray-600">Business</label>
+                  <select aria-label="Business" className="block w-full px-3 py-2 border rounded bg-white" value={businessAdd} onChange={(e)=>setBusinessAdd(e.target.value as any)}>
+                    <option value="Dates">Dates</option>
+                    <option value="Travel">Travel</option>
+                    <option value="Belts">Belts</option>
+                  </select>
+                </div>
 
-              <label className="text-xs">Amount</label>
-              <input type="number" className="w-full px-2 py-1 border rounded" value={amount} onChange={(e)=>setAmount(Number(e.target.value))} />
-
-              <label className="text-xs">Date</label>
-              <input type="date" className="w-full px-2 py-1 border rounded" value={date} onChange={(e)=>setDate(e.target.value)} />
-
-              <label className="text-xs">Description</label>
-              <input className="w-full px-2 py-1 border rounded" value={description} onChange={(e)=>setDescription(e.target.value)} />
-
-              <div className="text-right">
-                <button onClick={save} className="px-4 py-2 bg-indigo-600 text-white rounded">Add Expense</button>
+                <div>
+                  <label className="text-xs text-gray-600">Amount</label>
+                  <input aria-label="Amount" inputMode="numeric" type="number" className="w-full px-3 py-2 border rounded" value={amount} onChange={(e)=>setAmount(Number(e.target.value))} />
+                </div>
               </div>
-            </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-gray-600">Date</label>
+                  <input aria-label="Date" type="date" className="w-full px-3 py-2 border rounded" value={date} onChange={(e)=>setDate(e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-600">Description</label>
+                  <input aria-label="Description" className="w-full px-3 py-2 border rounded" value={description} onChange={(e)=>setDescription(e.target.value)} />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end">
+                <button type="submit" className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded shadow">Add Expense</button>
+              </div>
+            </form>
           </div>
 
           <div className="lg:col-span-2 bg-white p-4 rounded shadow">
-            <h3 className="font-semibold mb-2">Search / Filters</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-2">
-              <input placeholder="Search description..." value={q} onChange={(e)=>setQ(e.target.value)} className="px-3 py-2 border rounded col-span-2" />
-              <select value={businessFilter} onChange={(e)=>setBusinessFilter(e.target.value)} className="px-3 py-2 border rounded">
-                <option value="">All Business</option>
-                <option value="Dates">Dates</option>
-                <option value="Travel">Travel</option>
-                <option value="Belts">Belts</option>
-              </select>
-              <input type="date" value={startDateFilter} onChange={(e)=>setStartDateFilter(e.target.value)} className="px-3 py-2 border rounded" />
-              <input type="date" value={endDateFilter} onChange={(e)=>setEndDateFilter(e.target.value)} className="px-3 py-2 border rounded" />
-              <input placeholder="Min amount" value={minAmount} onChange={(e)=>setMinAmount(e.target.value)} className="px-3 py-2 border rounded" />
-              <input placeholder="Max amount" value={maxAmount} onChange={(e)=>setMaxAmount(e.target.value)} className="px-3 py-2 border rounded" />
+            <h3 className="font-semibold mb-3">Search & Filters</h3>
+            <div className="flex flex-col md:flex-row md:items-center md:gap-4 flex-wrap">
+              <div className="flex-1 min-w-0 relative">
+                {/* Search bar with icon + clear */}
+                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" /></svg>
+                </div>
+                <input placeholder="Search description..." value={q} onChange={(e)=>setQ(e.target.value)} className="pl-10 pr-10 w-full max-w-full px-3 py-2 border rounded min-w-0" />
+                {q && (
+                  <button onClick={()=>setQ('')} aria-label="Clear search" className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                )}
+              </div>
+
+              <div className="flex gap-2 flex-wrap items-center mt-3 md:mt-0">
+                <select value={businessFilter} onChange={(e)=>setBusinessFilter(e.target.value)} className="px-3 py-2 border rounded max-w-full min-w-0 w-44">
+                  <option value="">All Business</option>
+                  <option value="Dates">Dates</option>
+                  <option value="Travel">Travel</option>
+                  <option value="Belts">Belts</option>
+                </select>
+                <input title="Start date" type="date" value={startDateFilter} onChange={(e)=>setStartDateFilter(e.target.value)} className="px-3 py-2 border rounded max-w-full min-w-0 w-40" />
+                <input title="End date" type="date" value={endDateFilter} onChange={(e)=>setEndDateFilter(e.target.value)} className="px-3 py-2 border rounded max-w-full min-w-0 w-40" />
+                <input placeholder="Min" value={minAmount} onChange={(e)=>setMinAmount(e.target.value)} className="px-3 py-2 border rounded max-w-full min-w-0 w-28" />
+                <input placeholder="Max" value={maxAmount} onChange={(e)=>setMaxAmount(e.target.value)} className="px-3 py-2 border rounded max-w-full min-w-0 w-28" />
+              </div>
+
+              <div className="flex gap-2 mt-3 md:mt-0">
+                <button onClick={applyFilters} className="px-3 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700">Apply</button>
+                <button onClick={clearFilters} className="px-3 py-2 border rounded">Clear</button>
+              </div>
+            </div>
+
+            {/* Active filter chips */}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {q && (<span className="text-xs bg-gray-100 px-2 py-1 rounded flex items-center gap-2">Search: <strong className="ml-1">{q}</strong></span>)}
+              {businessFilter && (<span className="text-xs bg-gray-100 px-2 py-1 rounded">Business: <strong className="ml-1">{businessFilter}</strong></span>)}
+              {startDateFilter && (<span className="text-xs bg-gray-100 px-2 py-1 rounded">From: {startDateFilter}</span>)}
+              {endDateFilter && (<span className="text-xs bg-gray-100 px-2 py-1 rounded">To: {endDateFilter}</span>)}
+              {(minAmount || maxAmount) && (<span className="text-xs bg-gray-100 px-2 py-1 rounded">Amount: {minAmount || '0'} - {maxAmount || '∞'}</span>)}
             </div>
           </div>
         </div>
