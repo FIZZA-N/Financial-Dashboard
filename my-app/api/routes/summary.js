@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Order = require('../models/Order');
+const Expense = require('../models/Expense');
 const auth = require('../middleware/auth');
 
 // Get monthly summary
@@ -68,6 +69,22 @@ router.get('/monthly', auth, async (req, res) => {
       totalProfit += profit;
       pendingPayments += pending;
       totalLoss += loss;
+    });
+
+    // Subtract expenses per business for the period
+    const expenseRows = await Expense.aggregate([
+      { $match: { date: { $gte: startDate, $lte: endDate } } },
+      { $group: { _id: '$businessType', total: { $sum: '$amount' } } }
+    ]);
+    const expenseMap = {};
+    expenseRows.forEach(r => { expenseMap[r._id] = r.total; });
+    // apply to summary and totals
+    Object.keys(summary).forEach(b => {
+      const exp = Number(expenseMap[b] || 0);
+      summary[b].expenses = exp;
+      summary[b].profitAfterExpenses = Number(summary[b].profit || 0) - exp;
+      totalProfit -= exp;
+      totalCost += exp; // expenses are part of cost
     });
     
     // Investor view - show only 40% of actual profit

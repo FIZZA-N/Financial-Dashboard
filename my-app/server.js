@@ -60,6 +60,7 @@ const userRoutes = loadRouter('./api/routes/users', 'users');
 const productRoutes = loadRouter('./api/routes/products', 'products');
 const customerRoutes = loadRouter('./api/routes/customers', 'customers');
 const internalRoutes = loadRouter('./api/routes/internal', 'internal');
+const expensesRoutes = loadRouter('./api/routes/expenses', 'expenses');
 
 // Routes
 app.get('/test', (req, res)=>{
@@ -72,6 +73,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/internal', internalRoutes);
+app.use('/api/expenses', expensesRoutes);
 
 const PORT = process.env.PORT;
 app.listen(PORT, '0.0.0.0', () => {
