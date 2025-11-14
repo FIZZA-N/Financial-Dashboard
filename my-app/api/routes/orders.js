@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Order = require('../models/Order');
 const Customer = require('../models/Customer');
+const Product = require('../models/Product');
 const auth = require('../middleware/auth');
 const audit = require('../middleware/audit');
 
@@ -101,6 +102,35 @@ router.post('/', auth, audit('CREATE', 'Order'), async (req, res) => {
       profit,
       partialRemainingAmount,
     });
+    // Before saving the order, decrement stock for ordered products (simple validation)
+    if (Array.isArray(base.products) && base.products.length > 0) {
+      for (const p of base.products) {
+        try {
+          if (!p.productId) continue;
+          const prod = await Product.findById(p.productId);
+          if (!prod) continue;
+          const qty = Number(p.quantity || 0);
+          if (qty <= 0) continue;
+          if ((prod.stock || 0) < qty) {
+            return res.status(400).json({ message: `Insufficient stock for product ${prod.name}` });
+          }
+        } catch (e) {
+          console.error('Stock validation error', e);
+        }
+      }
+      // All validated — decrement atomically
+      for (const p of base.products) {
+        try {
+          if (!p.productId) continue;
+          const qty = Number(p.quantity || 0);
+          if (qty <= 0) continue;
+          await Product.findByIdAndUpdate(p.productId, { $inc: { stock: -qty } });
+        } catch (e) {
+          console.error('Failed to decrement stock for product', p.productId, e);
+        }
+      }
+    }
+
     await order.save();
 
     // Return the created order populated with customer when possible
