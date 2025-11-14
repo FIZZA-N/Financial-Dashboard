@@ -19,6 +19,7 @@ import {
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/orders", label: "Orders", icon: ClipboardList },
+  { href: "/preview-slip", label: "Preview Slip", icon: FileText },
   { href: "/products", label: "Products", icon: Box },
   { href: "/expenses", label: "Expenses", icon: FileText },
   { href: "/ledger", label: "Ledger", icon: BookOpen },

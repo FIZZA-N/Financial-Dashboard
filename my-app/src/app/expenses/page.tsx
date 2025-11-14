@@ -2,6 +2,7 @@
 import { useEffect, useState, useRef } from 'react';
 import Sidebar from '@/components/Sidebar';
 import api from '@/lib/api';
+import { generateOrderSlip } from '@/lib/pdf';
 import { toast } from '@/store/toastStore';
 
 export default function ExpensesPage() {
@@ -76,6 +77,32 @@ export default function ExpensesPage() {
     }
   };
 
+  const generateFakeSlip = async () => {
+    try {
+      // Build a fake order object using values from the add form. This will not be saved.
+      const fakeOrder: any = {
+        orderId: `FAKE-${Date.now()}`,
+        businessType: businessAdd,
+        productServiceName: description || 'Sample Item',
+        sellingPrice: Number(amount) || 0,
+        quantity: 1,
+        orderDiscount: 0,
+        deliveryCharge: 0,
+        deliveryPaidByCustomer: true,
+        paymentStatus: 'Pending',
+        customerName: 'Demo Customer',
+        customerPhone: '',
+        customerAddress: '',
+        createdAt: new Date().toISOString(),
+      };
+
+      await generateOrderSlip(fakeOrder);
+    } catch (err) {
+      console.error('Failed to generate fake slip', err);
+      toast.error('Failed to generate slip');
+    }
+  };
+
   const remove = async (id: string) => {
     if (!confirm('Delete this expense?')) return;
     try {
@@ -145,7 +172,10 @@ export default function ExpensesPage() {
               </div>
 
               <div className="flex items-center justify-end">
-                <button type="submit" className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded shadow">Add Expense</button>
+                <div className="flex gap-2">
+                  <button type="button" onClick={generateFakeSlip} className="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded">Preview Slip</button>
+                  <button type="submit" className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded shadow">Add Expense</button>
+                </div>
               </div>
             </form>
           </div>
